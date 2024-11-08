@@ -1,0 +1,10 @@
+Uncompressed_Public_Key,Compressed_Public_Key,Legacy_Address,Segwit_Address,Identifier
+key1,c_key1,legacy1,segwit1,0.0
+key2,c_key2,legacy2,,
+key1,c_key1,legacy1,segwit1,0.0
+key3,c_key3,legacy3,segwit3,1.0
+key3,c_key3,legacy3,segwit3,1.0
+key3,c_key3,legacy3,segwit3,1.0
+key3,c_key3,legacy3,segwit3,1.0
+key4,,legacy4,segwit4,
+key4,,,segwit4,
