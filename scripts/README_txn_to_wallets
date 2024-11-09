@@ -1,0 +1,24 @@
+Code:
+This code was designed to reduce cluster collapse in clustering algorithms and heuristics by first identifying which transactions belong to a wallet with 100% certainty. It does so by matching hashes to their highest level hash present in the blockchain. 
+
+Steps to use:
+Note - I plan on further abstracting to hide this complexity. The finished result will be a single wrapper module that returns the wallet data.
+Use deriveUndefinedAddress() on each row of the transaction data
+1.) Check if the type is pubkey. If not, place it in the column corresponding to its script type.
+ -> If it is pubkey, append the results to the columns
+2.) Use matchAddresses() to uniquely identify which transactions belong to a wallet and record which other hashes that transaction is associated with.
+3.) Use matchInputOutput() to create a column of from Identifiers.
+4.) Use the resulting data for clustering, recursively collapsing wallet Identifiers into cluster Identifiers as more are found. This significantly increases clustering accuracy and speed.
+
+Background:
+A Bitcoin address is a one way hash of a public key. There are multiple different ways to hash a public key, and thus there are multiple types of hashes. The receipt of Bitcoin, or more correctly, the unlocking of an a previous transactions output (which is an input to the current transaction) only requires that the conditions specified in the locking script are met by the unlocker. These conditions can be anything, even something as simple as solving a system of equations. However, it is most useful to transact Bitcoin by doing so with specific entities. This is why hashes of the private key are used. A script can require that the unlocker creates a specific hash function’s output (such as an address or a public key). It is most feasible (and economical) to do this only when the unlocker possesses the input necessary to create that hash functions output (such as a private key -> public key or a public key -> address). Guessing the input necessary to create the hash is extremely unlikely, and therefore, expensive. 
+
+A significant subgoal of this project is correctly estimating when Bitcoin flows in and out of a wallet. Two problems exist in this pursuit:
+a.) The Bitcoin blockchain transaction data only provides the unlocking and locking scripts for a transaction, not an explicit wallet which sent or received Bitcoin.
+b.) One entity can own multiple Bitcoin wallets. When this entity transfers money between their wallets, it misrepresents the true amount of foreign Bitcoin flowing within these wallets.
+
+For the first problem, the best way to get a lower bound of the transactions belonging to a wallet is to match all hashes to their highest level hash in the blockchain and assign them all a unique identifier specifying the wallet they belong to. For example, public key A can create h1(A) = hash 1 and h2(A) = hash 2. When a public key is found, it can be hashed it in all standard ways (such as h1 and h2 in this example) and these hashes can be searched for in the blockchain. If they are found, they are identified the same as the public key. It is impossible to identify the transactions belonging to every single wallet with 100% accuracy because anything can go in a locking and unlocking script (ex: unlock this Bitcoin if you can add “hello”to your private key and it matches this privatekeyhello). However, most entities, especially traders, will use these hashes. 
+
+For the second problem, the best way to get around this is to cluster wallets and treat transactions within the cluster as self transfers. This can be done through classification algorithms, heuristic methods, or both.
+
+
