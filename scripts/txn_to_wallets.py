@@ -1,3 +1,4 @@
+# Developed by Noah Tover #
 import bitcoinlib
 import pandas as pd
 # The following modules can be used to link heterogenous transactions as belonging to a specific wallet in Bitcoin blockchain transaction data.
