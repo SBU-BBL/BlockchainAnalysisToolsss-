@@ -18,7 +18,7 @@ rpc_user = '<your_rpc_username>'
 rpc_password = '<your_rpc_password>'
 rpc_url = 'http://127.0.0.1:8332/'
 headers = {'content-type': 'text/plain;'}
-
+progress_n = 100 # Prints progress every 100 blocks
 # Folder to save CSV files
 csv_folder = 'D:/bitcoin_data' # Update this path as needed
 os.makedirs(csv_folder, exist_ok=True)
@@ -66,7 +66,6 @@ def get_vin(vin):
             "vin_txid": None,
             "vin_vout": None,
             "vin_scriptSig_asm": None,
-            "vin_scriptSig_hex": None,
             "vin_txinwitness": None,
             "vin_sequence": None
         }
@@ -77,7 +76,6 @@ def get_vin(vin):
             "vin_txid": vin_data.get("txid", None),
             "vin_vout": vin_data.get("vout", None),
             "vin_scriptSig_asm": scriptSig.get("asm", None),
-            "vin_scriptSig_hex": scriptSig.get("hex", None),
             "vin_txinwitness": json.dumps(vin_data.get("txinwitness", None)),
             "vin_sequence": vin_data.get("sequence", None)
         })
@@ -91,8 +89,6 @@ def get_vout(vout):
             "vout_value": None,
             "vout_n": None,
             "vout_scriptPubKey_asm": None,
-            "vout_scriptPubKey_desc": None,
-            "vout_scriptPubKey_hex": None,
             "vout_scriptPubKey_address": None,
             "vout_scriptPubKey_type": None
         }
@@ -104,8 +100,6 @@ def get_vout(vout):
             "vout_value": vout_data.get("value", None),
             "vout_n": vout_data.get("n", None),
             "vout_scriptPubKey_asm": scriptPubKey.get("asm", None),
-            "vout_scriptPubKey_desc": scriptPubKey.get("desc", None),
-            "vout_scriptPubKey_hex": scriptPubKey.get("hex", None),
             "vout_scriptPubKey_address": scriptPubKey.get("address", None),
             "vout_scriptPubKey_type": scriptPubKey.get("type", None)
         })
@@ -117,8 +111,8 @@ def extract_blocks_and_transactions(start_height, chunk_size=10000):
     """
     block_fieldnames = ["hash", "confirmations", "size", "height", "version", "merkleroot", "time", "nonce", "bits", "difficulty", "previousblockhash", "nextblockhash"]
     transaction_fieldnames = ["txid", "blockhash", "size", "version", "locktime",
-                              "vin_txid", "vin_vout", "vin_scriptSig_asm", "vin_scriptSig_hex", "vin_txinwitness", "vin_sequence",
-                              "vout_value", "vout_n", "vout_scriptPubKey_asm", "vout_scriptPubKey_desc", "vout_scriptPubKey_hex", "vout_scriptPubKey_address", "vout_scriptPubKey_type"]
+                              "vin_txid", "vin_vout", "vin_scriptSig_asm", "vin_txinwitness", "vin_sequence",
+                              "vout_value", "vout_n", "vout_scriptPubKey_asm", "vout_scriptPubKey_address", "vout_scriptPubKey_type"]
 
     end_height = rpc_request("getblockcount")['result']
     
@@ -144,8 +138,9 @@ def extract_blocks_and_transactions(start_height, chunk_size=10000):
                         tx_entry.update(vin_data)
                         tx_entry.update(vout_data)
                         transactions.append(tx_entry)
-            # Print progress
-            print(f"Processed block height: {height}")
+            # Print progress every progress_n blocks
+            if height % progress_n == 0:
+                print(f"Processed block height: {height}")
             sleep(0.1)  # To avoid overloading the RPC server
 
         # Save the blocks and transactions data to CSV files for the current chunk
