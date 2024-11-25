@@ -79,7 +79,7 @@ def get_vin(vin):
         "vin_txid": flattened_data.get("txid", None),
         "vin_vout": flattened_data.get("vout", None),
         "vin_scriptSig_asm": flattened_data.get("scriptSig", None),
-        "vin_txinwitness": json.dumps(flattened_data.get("txinwitness", None)), # TODO: Call RPC "decodescript" if this hex exists, then get address and asm from here
+        "vin_txinwitness": flattened_data.get("txinwitness", None), # TODO: Call RPC "decodescript" if this hex exists, then get address and asm from here
         "vin_sequence": flattened_data.get("sequence", None)
     }
 #TODO: Collapse get_vout and get_vin into one module with a paste - dependencies.
@@ -97,15 +97,15 @@ def get_vout(vout):
             "vout_scriptPubKey_type": None
         }
     for each in vout:
-        each["address"] = each["scriptSig"]["address"]
-        each["asm"] = each["scriptSig"]["asm"] 
-        each["type"] = each["scriptSig"]["type"]
-        each["desc"] = each["scriptSig"]["desc"]
+        each["address"] = each["scriptPubKey"]["address"]
+        each["asm"] = each["scriptPubKey"]["asm"] 
+        each["type"] = each["scriptPubKey"]["type"]
+        each["desc"] = each["scriptPubKey"]["desc"]
     vout_df = pd.DataFrame(vout)
     flattened_data = vout_df.to_dict('list') # Flatten unique vin objects to list
     return {
-        "vout_value": vout_data.get("value", None),
-        "vout_n": vout_data.get("n", None),
+        "vout_value": flattened_data.get("value", None),
+        "vout_n": flattened_data.get("n", None),
         "vout_scriptPubKey_asm": flattened_data.get("asm", None),
         "vout_scriptPubKey_desc": flattened_data.get("desc", None),
         "vout_scriptPubKey_address": flattened_data.get("address", None), 
