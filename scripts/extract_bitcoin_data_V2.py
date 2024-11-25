@@ -12,6 +12,7 @@ import requests
 from time import sleep
 import gzip
 import shutil
+import pandas as pd
 
 # Configuration
 rpc_user = '<your_rpc_username>'
@@ -69,17 +70,9 @@ def get_vin(vin):
             "vin_txinwitness": None,
             "vin_sequence": None
         }
-    vin_list = []
-    for vin_data in vin:
-        scriptSig = vin_data.get("scriptSig", {})
-        vin_list.append({
-            "vin_txid": vin_data.get("txid", None),
-            "vin_vout": vin_data.get("vout", None),
-            "vin_scriptSig_asm": scriptSig.get("asm", None),
-            "vin_txinwitness": json.dumps(vin_data.get("txinwitness", None)),
-            "vin_sequence": vin_data.get("sequence", None)
-        })
-    return vin_list
+    vin_df = pd.DataFrame(vin)
+    flattened_data = vin_df.to_dict('list') # Flatten unique vin objects to list
+    return flattened_data
 def get_vout(vout):
     """
     Flattens the vout field.
@@ -93,27 +86,15 @@ def get_vout(vout):
             "vout_scriptPubKey_type": None
         }
 
-    vout_list = []
-    for vout_data in vout:
-        scriptPubKey = vout_data.get("scriptPubKey", {})
-        vout_list.append({
-            "vout_value": vout_data.get("value", None),
-            "vout_n": vout_data.get("n", None),
-            "vout_scriptPubKey_asm": scriptPubKey.get("asm", None),
-            "vout_scriptPubKey_address": scriptPubKey.get("address", None),
-            "vout_scriptPubKey_type": scriptPubKey.get("type", None)
-        })
-    return vout_list
+    vout_df = pd.DataFrame(vout)
+    flattened_data = vout_df.to_dict('list') # Flatten unique vin objects to list
+    return flattened_data
 
 def extract_blocks_and_transactions(start_height, chunk_size=10000):
     """
     Extracts block and transaction data from a specific start height to the latest block.
     """
     block_fieldnames = ["hash", "confirmations", "size", "height", "version", "merkleroot", "time", "nonce", "bits", "difficulty", "previousblockhash", "nextblockhash"]
-    transaction_fieldnames = ["txid", "blockhash", "size", "version", "locktime",
-                              "vin_txid", "vin_vout", "vin_scriptSig_asm", "vin_txinwitness", "vin_sequence",
-                              "vout_value", "vout_n", "vout_scriptPubKey_asm", "vout_scriptPubKey_address", "vout_scriptPubKey_type"]
-
     end_height = rpc_request("getblockcount")['result']
     
     for chunk_start in range(start_height, end_height + 1, chunk_size):
@@ -132,12 +113,10 @@ def extract_blocks_and_transactions(start_height, chunk_size=10000):
                 base_tx_data = {key: tx[key] for key in ["txid", "blockhash", "size", "version", "locktime"] if key in tx}
                 base_tx_data['blockhash'] = blockhash
 
-                for vin_data in get_vin(tx.get("vin", [])):
-                    for vout_data in get_vout(tx.get("vout", [])):
-                        tx_entry = base_tx_data.copy()
-                        tx_entry.update(vin_data)
-                        tx_entry.update(vout_data)
-                        transactions.append(tx_entry)
+                tx_entry = base_tx_data.copy()
+                tx_entry.update(get_vin(tx.get("vin", [])))
+                tx_entry.update(get_vout(tx.get("vout", [])))
+                transactions.append(tx_entry)
             # Print progress every progress_n blocks
             if height % progress_n == 0:
                 print(f"Processed block height: {height}")
@@ -145,10 +124,11 @@ def extract_blocks_and_transactions(start_height, chunk_size=10000):
 
         # Save the blocks and transactions data to CSV files for the current chunk
         blocks_filename = os.path.join(csv_folder, f'blocks_{chunk_start}_{chunk_end}.csv')
-        transactions_filename = os.path.join(csv_folder, f'transactions_{chunk_start}_{chunk_end}.csv')
+        transactions_filename = os.path.join(csv_folder, f'transactions_{chunk_start}_{chunk_end}.json')
         
         save_to_csv(blocks_filename, block_fieldnames, blocks)
-        save_to_csv(transactions_filename, transaction_fieldnames, transactions)
+        with open(transactions_filename, 'w', encoding='utf-8') as jsonfile:
+          json.dump(transactions, jsonfile)
 
 def main():
     # Define the starting block height for extraction
