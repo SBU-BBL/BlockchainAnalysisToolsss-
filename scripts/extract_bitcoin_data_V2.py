@@ -70,9 +70,19 @@ def get_vin(vin):
             "vin_txinwitness": None,
             "vin_sequence": None
         }
+    for each in vin:
+        each["scriptSig"] = each["scriptSig"]["asm"] # Only get the asm 
+        
     vin_df = pd.DataFrame(vin)
     flattened_data = vin_df.to_dict('list') # Flatten unique vin objects to list
-    return flattened_data
+    return {
+        "vin_txid": flattened_data.get("txid", None),
+        "vin_vout": flattened_data.get("vout", None),
+        "vin_scriptSig_asm": flattened_data.get("scriptSig", None),
+        "vin_txinwitness": json.dumps(flattened_data.get("txinwitness", None)), # TODO: Call RPC "decodescript" if this hex exists, then get address and asm from here
+        "vin_sequence": flattened_data.get("sequence", None)
+    }
+#TODO: Collapse get_vout and get_vin into one module with a paste - dependencies.
 def get_vout(vout):
     """
     Flattens the vout field.
@@ -82,13 +92,25 @@ def get_vout(vout):
             "vout_value": None,
             "vout_n": None,
             "vout_scriptPubKey_asm": None,
+            "vout_scriptPubKey_desc": None,
             "vout_scriptPubKey_address": None,
             "vout_scriptPubKey_type": None
         }
-
+    for each in vout:
+        each["address"] = each["scriptSig"]["address"]
+        each["asm"] = each["scriptSig"]["asm"] 
+        each["type"] = each["scriptSig"]["type"]
+        each["desc"] = each["scriptSig"]["desc"]
     vout_df = pd.DataFrame(vout)
     flattened_data = vout_df.to_dict('list') # Flatten unique vin objects to list
-    return flattened_data
+    return {
+        "vout_value": vout_data.get("value", None),
+        "vout_n": vout_data.get("n", None),
+        "vout_scriptPubKey_asm": flattened_data.get("asm", None),
+        "vout_scriptPubKey_desc": flattened_data.get("desc", None),
+        "vout_scriptPubKey_address": flattened_data.get("address", None), 
+        "vout_scriptPubKey_type": flattened_data.get("type", None)
+    }
 
 def extract_blocks_and_transactions(start_height, chunk_size=10000):
     """
