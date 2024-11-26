@@ -71,7 +71,7 @@ def get_vin(vin):
             "vin_sequence": None
         }
     for each in vin:
-        each["scriptSig"] = each["scriptSig"]["asm"] # Only get the asm 
+        each["scriptSig"] = each.get("scriptSig", {}).get("asm") # Only get the asm 
         
     vin_df = pd.DataFrame(vin)
     flattened_data = vin_df.to_dict('list') # Flatten unique vin objects to list
@@ -97,10 +97,10 @@ def get_vout(vout):
             "vout_scriptPubKey_type": None
         }
     for each in vout:
-        each["address"] = each["scriptPubKey"]["address"]
-        each["asm"] = each["scriptPubKey"]["asm"] 
-        each["type"] = each["scriptPubKey"]["type"]
-        each["desc"] = each["scriptPubKey"]["desc"]
+        each["address"] = each.get("scriptPubKey", {}).get("address")
+    	each["asm"] = each.get("scriptPubKey", {}).get("asm")
+    	each["type"] = each.get("scriptPubKey", {}).get("type")
+    	each["desc"] = each.get("scriptPubKey", {}).get("desc")
     vout_df = pd.DataFrame(vout)
     flattened_data = vout_df.to_dict('list') # Flatten unique vin objects to list
     return {
