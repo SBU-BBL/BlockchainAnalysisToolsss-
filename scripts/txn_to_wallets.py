@@ -88,3 +88,15 @@ def matchInputOutput(txns, chunk_size, vin_txid_colname = 'vin_txid', vout_index
     txns.iloc[i]['From_Identifier'] = matched_output['Identifier'].iloc[0] # Problem: This input could be made from many outputs. How do i do this correctly?
   return txns
 ####################################################################################################
+# Grabs the push data in between all the OP_ calls in the asm field, stores the results in a list
+# This is intended to be used for parsing public keys from pubkey and multisig transcations.
+def parsePushData(script_asm, output = True):
+  # TODO: Add option for inputs.
+  if not isinstance(script_asm, str):
+    script_asm = str(script_asm)
+  substrings = script_asm.split()
+    # Subsets portion of hex before commands
+  push_data = [substring for substring in substrings if not substring.startswith('OP')]
+  return push_data
+  ####################################################################################################
+
