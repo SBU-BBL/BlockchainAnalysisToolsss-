@@ -74,7 +74,7 @@ def get_vin(vin):
         each["scriptSig"] = each["scriptSig"]["asm"] # Only get the asm 
         
     vin_df = pd.DataFrame(vin)
-    flattened_data = vin_df.to_dict('list') # Flatten unique vin objects to list
+    flattened_data = {col: tuple(vin_df[col]) for col in vin_df.columns} # Flatten unique vin objects to tuples
     return {
         "vin_txid": flattened_data.get("txid", None),
         "vin_vout": flattened_data.get("vout", None),
@@ -102,7 +102,7 @@ def get_vout(vout):
         each["type"] = each["scriptPubKey"]["type"]
         each["desc"] = each["scriptPubKey"]["desc"]
     vout_df = pd.DataFrame(vout)
-    flattened_data = vout_df.to_dict('list') # Flatten unique vin objects to list
+    flattened_data = {col: tuple(vout_df[col]) for col in vout_df.columns} # Flatten unique vout objects to tuple
     return {
         "vout_value": flattened_data.get("value", None),
         "vout_n": flattened_data.get("n", None),
