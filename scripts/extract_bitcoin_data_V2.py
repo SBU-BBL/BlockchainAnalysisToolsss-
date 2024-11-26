@@ -15,13 +15,14 @@ import shutil
 import pandas as pd
 
 # Configuration
+chunksize = 500000 # About 2 MB per 1000 txns, chunk size should be ~ 25% of RAM for processing
 rpc_user = '<your_rpc_username>'
 rpc_password = '<your_rpc_password>'
 rpc_url = 'http://127.0.0.1:8332/'
 headers = {'content-type': 'text/plain;'}
-progress_n = 100 # Prints progress every 100 blocks
+progress_n = 100 # Prints progress every progess_n blocks
 # Folder to save CSV files
-csv_folder = 'D:/bitcoin_data' # Update this path as needed
+csv_folder = "E:/Blockchain_Download/Blockchain_Data" # Update this path as needed
 os.makedirs(csv_folder, exist_ok=True)
 
 def rpc_request(method, params=[]):
@@ -98,9 +99,9 @@ def get_vout(vout):
         }
     for each in vout:
         each["address"] = each.get("scriptPubKey", {}).get("address")
-    	each["asm"] = each.get("scriptPubKey", {}).get("asm")
-    	each["type"] = each.get("scriptPubKey", {}).get("type")
-    	each["desc"] = each.get("scriptPubKey", {}).get("desc")
+        each["asm"] = each.get("scriptPubKey", {}).get("asm")
+        each["type"] = each.get("scriptPubKey", {}).get("type")
+        each["desc"] = each.get("scriptPubKey", {}).get("desc")
     vout_df = pd.DataFrame(vout)
     flattened_data = vout_df.to_dict('list') # Flatten unique vin objects to list
     return {
@@ -112,7 +113,7 @@ def get_vout(vout):
         "vout_scriptPubKey_type": flattened_data.get("type", None)
     }
 
-def extract_blocks_and_transactions(start_height, chunk_size=10000):
+def extract_blocks_and_transactions(start_height, chunk_size=chunksize):
     """
     Extracts block and transaction data from a specific start height to the latest block.
     """
