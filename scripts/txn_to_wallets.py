@@ -4,7 +4,7 @@ import pandas as pd
 # The following modules can be used to link heterogenous transactions as belonging to a specific wallet in Bitcoin blockchain transaction data.
 #######################################################################################################
 # Creates a dictionary of derived addressed and compressed and uncompressed version(s) of the pubkey(s)
-def deriveUndefinedAddresses(pubkey, keep_types = False):
+def deriveUndefinedAddresses(pubkey):
   # To do: Add exception to see if functions needed are imported
   if not isinstance(pubkey, list):
         raise TypeError("pubkey should be a list")
