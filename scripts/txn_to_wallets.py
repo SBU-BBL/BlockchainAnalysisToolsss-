@@ -6,7 +6,8 @@ import pandas as pd
 # Creates a dictionary of derived addressed and compressed and uncompressed version(s) of the pubkey(s)
 def deriveUndefinedAddresses(pubkey, keep_types = False):
   # To do: Add exception to see if functions needed are imported
-  # To do: Ensure pubkey is list
+  if not isinstance(pubkey, list):
+        raise TypeError("pubkey should be a list")
   # Determine if pubkey is compressed or uncompressed
   def deriveIndividualAddresses(ith_key):
     key = bitcoinlib.keys.Key(import_key = ith_key)
