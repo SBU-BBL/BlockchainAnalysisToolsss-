@@ -4,7 +4,7 @@ import pandas as pd
 # The following modules can be used to link heterogenous transactions as belonging to a specific wallet in Bitcoin blockchain transaction data.
 #######################################################################################################
 # Creates a dictionary of derived addressed and compressed and uncompressed version(s) of the pubkey(s)
-def deriveUndefinedAddresses(pubkey):
+def deriveUndefinedAddresses(pubkey, keep_types = False):
   # To do: Add exception to see if functions needed are imported
   # To do: Ensure pubkey is list
   # Determine if pubkey is compressed or uncompressed
@@ -17,20 +17,17 @@ def deriveUndefinedAddresses(pubkey):
       uncompressed_key = key
       compressed_key = key.public_compressed_hex()
       # To do: Add more address support.
-    individualAddresses = {
-        'Uncompressed_Public_Key': uncompressed_key,
-        'Compressed_Public_Key': compressed_key,
-        'Legacy_Address': uncompressed_key.address(encoding = 'base58', witness_type = 'legacy'),
-        'Segwit_Address': compressed_key.address(encoding = 'base32', witness_type = 'segwit')
-    }
-    addressesDF = pd.DataFrame(individualAddresses)
-    return addressesDF
-  df_list = []
-  for each in pubkey:
-    df = deriveIndividualAddresses(each)
-    df_list.append(df)
-  merged_df = pd.concat(df_list, axis = 0, ignore_index = TRUE)
-  return merged_df
+    legacy_address = uncompressed_key.address(encoding = 'base58', witness_type = 'legacy')
+    segwit_address = compressed_key.address(encoding = 'base32', witness_type = 'segwit')
+    defined_addresses = [uncompressed_key, compressed_key, legacy_address, segwit_address]
+    return defined_addresses
+  # Dependency - pubkeys should be lists for multisig support.
+  address_list = []
+  for each_key in pubkey:
+    ithkey_addresses = deriveIndividualAddresses(each_key)
+    address_list.append(ithkey_addresses)
+  flattened_address_list = [each for sublist in address_list for each in sublist]
+  return flattened_address_list
 ####################################################################################################
 # This function searches the dataset for any duplicated values in one of the columns created by the undefined address function (Uncompressed PK, Compressed PK, Legacy Address, Segwit Address)
 # If any transactions share a duplicate and have missing values in any one of these observations, the missings will be overwritten by the non missing information in the other transactions.
