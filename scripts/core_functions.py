@@ -107,8 +107,8 @@ def parsePushData(script_asm, individuals_in_list = True):
 # This function simply fills the address list with the public keys, or if multisig, a list of public keys.
 # This helps simplify the data processing in clustering and matching by allowing for a single column to be used-the addresses
 def extractPublicKeysToAddresses(transactions, vout_type = "vout_scriptPubKey_type", vout_asm = "vout_scriptPubKey_asm", vout_address = "vout_scriptPubKey_address"):
-    if not isinstance(transactions, dict):
-        raise TypeError("transactions must be a dictionary")
+    if not isinstance(transactions, list):
+        raise TypeError("transactions must be a list of dictionaries")
     for tx in transactions:
         for i, script_type in enumerate(tx[vout_type]):
             if script_type in ["pubkey", "multisig"]:
