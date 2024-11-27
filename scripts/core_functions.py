@@ -91,13 +91,17 @@ def matchInputOutput(txns, chunk_size, vin_txid_colname = 'vin_txid', vout_index
 ####################################################################################################
 # Grabs the push data in between all the OP_ calls in the asm field, stores the results in a list
 # This is intended to be used for parsing public keys from pubkey and multisig transcations.
-def parsePushData(script_asm, output = True):
+# If individuals_in_list argument is set to False, single public keys will be returned as strings. By default, all returns are in lists.
+def parsePushData(script_asm, individuals_in_list = True):
   # TODO: Add option for inputs.
   if not isinstance(script_asm, str):
     script_asm = str(script_asm)
   substrings = script_asm.split()
     # Subsets portion of hex before commands
   push_data = [substring for substring in substrings if not substring.startswith('OP')]
+  if individuals_in_list = False:
+    if len(push_data) == 1:
+      push_data = push_data[0] # Unlist single public key
   return push_data
 ####################################################################################################
 # This function simply fills the address list with the public keys, or if multisig, a list of public keys.
