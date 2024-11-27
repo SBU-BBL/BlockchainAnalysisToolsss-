@@ -99,5 +99,16 @@ def parsePushData(script_asm, output = True):
     # Subsets portion of hex before commands
   push_data = [substring for substring in substrings if not substring.startswith('OP')]
   return push_data
-  ####################################################################################################
-
+####################################################################################################
+# This function simply fills the address list with the public keys, or if multisig, a list of public keys.
+# This helps simplify the data processing in clustering and matching by allowing for a single column to be used-the addresses
+def extractPublicKeysToAddresses(transactions, vout_type = "vout_scriptPubKey_type", vout_asm = "vout_scriptPubKey_asm", vout_address = "vout_scriptPubKey_address"):
+    if not isinstance(transactions, dict):
+        raise TypeError("transactions must be a dictionary")
+    for tx in transactions:
+        for i, script_type in enumerate(tx[vout_type]):
+            if script_type in ["pubkey", "multisig"]:
+                # Parse the public keys from the ASM field
+                public_keys = parsePushData(tx[vout_asm][i], individuals_in_list = False)
+                tx[vout_address][i] = public_keys
+    return transactions
