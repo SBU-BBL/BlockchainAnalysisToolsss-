@@ -28,7 +28,8 @@ def deriveUndefinedAddresses(pubkey):
     ithkey_addresses = deriveIndividualAddresses(each_key)
     address_list.append(ithkey_addresses)
   flattened_address_list = [each for sublist in address_list for each in sublist]
-  return flattened_address_list
+  address_tuple = tuple(flattened_address_list) # Store as tuple. No addresses should be added, speeds matching.
+  return address_tuple
 ####################################################################################################
 # This function searches the dataset for any duplicated values in one of the columns created by the undefined address function (Uncompressed PK, Compressed PK, Legacy Address, Segwit Address)
 # If any transactions share a duplicate and have missing values in any one of these observations, the missings will be overwritten by the non missing information in the other transactions.
