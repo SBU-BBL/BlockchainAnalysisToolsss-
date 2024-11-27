@@ -99,7 +99,7 @@ def parsePushData(script_asm, individuals_in_list = True):
   substrings = script_asm.split()
     # Subsets portion of hex before commands
   push_data = [substring for substring in substrings if not substring.startswith('OP')]
-  if individuals_in_list = False:
+  if individuals_in_list == False:
     if len(push_data) == 1:
       push_data = push_data[0] # Unlist single public key
   return push_data
