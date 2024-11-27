@@ -12,15 +12,15 @@ def deriveUndefinedAddresses(pubkey):
   def deriveIndividualAddresses(ith_key):
     key = bitcoinlib.keys.Key(import_key = ith_key)
     if key.compressed == True:
-      uncompressed_key = key.public_uncompressed_hex()
+      uncompressed_key = bitcoinlib.keys.Key(import_key = key.public_uncompressed_hex)
       compressed_key = key
     else:
       uncompressed_key = key
-      compressed_key = key.public_compressed_hex()
+      compressed_key = bitcoinlib.keys.Key(import_key = key.public_compressed_hex)
       # To do: Add more address support.
-    legacy_address = uncompressed_key.address(encoding = 'base58', witness_type = 'legacy')
-    segwit_address = compressed_key.address(encoding = 'base32', witness_type = 'segwit')
-    defined_addresses = [uncompressed_key, compressed_key, legacy_address, segwit_address]
+    legacy_address = uncompressed_key.address(encoding = 'base58', script_type = 'p2pkh')
+    segwit_address = compressed_key.address(encoding = 'bech32', script_type = 'p2wpkh')
+    defined_addresses = [key.public_uncompressed_hex, key.public_compressed_hex, legacy_address, segwit_address]
     return defined_addresses
   # Dependency - pubkeys should be lists for multisig support.
   address_list = []
