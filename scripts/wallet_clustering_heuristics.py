@@ -1,4 +1,8 @@
-
+##########################################################################################################################################
+##########################################################################################################################################
+##############################################           Written by Noah Tover           #################################################
+##########################################################################################################################################
+##########################################################################################################################################
 # This function assigns a unique number to all identifiers which show up together as the input of a transaction. The logic behind this heuristic is that keys are likely controlled all by one entity if they show up simultaneously, and that entity must own these wallets.
 def commonSpendCluster(input_wallets, identifiers):
   # identifiers is expected to be a dataframe of the unique identifiers sorted. can easily be created with seq from 0 to max in identifiers too.
