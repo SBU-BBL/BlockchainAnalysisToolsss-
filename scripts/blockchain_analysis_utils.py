@@ -54,8 +54,9 @@ def prune_dictionaries(list_of_dicts):
     # Create a set of keys to remove.
     keys_to_remove = set()
     keys = list(merged_dict.keys())
-    
     # Iterate through each key to check for smaller tuple subsets
+    # TO DO: Change nested loop to recursion
+    # TO DO: Avoid explicit looping through keys. Research to find a faster algorithm
     for i, key1 in enumerate(keys):
         for key2 in keys:
             if key1 != key2 and set(key1).issubset(set(key2)):  # If key1 is a subset of key2
