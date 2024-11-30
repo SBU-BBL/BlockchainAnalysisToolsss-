@@ -5,31 +5,19 @@ import pandas as pd
 #######################################################################################################
 # Creates a dictionary of derived addressed and compressed and uncompressed version(s) of the pubkey(s)
 def deriveUndefinedAddresses(pubkey):
-  # To do: Add exception to see if functions needed are imported
-  if not isinstance(pubkey, list):
-        raise TypeError("pubkey should be a list")
-  # Determine if pubkey is compressed or uncompressed
-  def deriveIndividualAddresses(ith_key):
-    key = bitcoinlib.keys.Key(import_key = ith_key)
-    if key.compressed == True:
-      uncompressed_key = bitcoinlib.keys.Key(import_key = key.public_uncompressed_hex)
-      compressed_key = key
-    else:
-      uncompressed_key = key
-      compressed_key = bitcoinlib.keys.Key(import_key = key.public_compressed_hex)
-      # To do: Add more address support.
-    legacy_address = uncompressed_key.address(encoding = 'base58', script_type = 'p2pkh')
-    segwit_address = compressed_key.address(encoding = 'bech32', script_type = 'p2wpkh')
-    defined_addresses = [key.public_uncompressed_hex, key.public_compressed_hex, legacy_address, segwit_address]
-    return defined_addresses
-  # Dependency - pubkeys should be lists for multisig support.
-  address_list = []
-  for each_key in pubkey:
-    ithkey_addresses = deriveIndividualAddresses(each_key)
-    address_list.append(ithkey_addresses)
-  flattened_address_list = [each for sublist in address_list for each in sublist]
-  address_tuple = tuple(flattened_address_list) # Store as tuple. No addresses should be added, speeds matching.
-  return address_tuple
+  key = bitcoinlib.keys.Key(import_key = ith_key)
+  if key.compressed == True:
+    uncompressed_key = bitcoinlib.keys.Key(import_key = key.public_uncompressed_hex)
+    compressed_key = key
+  else:
+    uncompressed_key = key
+    compressed_key = bitcoinlib.keys.Key(import_key = key.public_compressed_hex)
+    # To do: Add more address support.
+  legacy_address = uncompressed_key.address(encoding = 'base58', script_type = 'p2pkh')
+  segwit_address = compressed_key.address(encoding = 'bech32', script_type = 'p2wpkh')
+  # Stored in a tuple as no addresses should be added outside of this function. Also speeds matching.
+  defined_addresses = (key.public_uncompressed_hex, key.public_compressed_hex, legacy_address, segwit_address)
+  return defined_addresses
 ####################################################################################################
 # This function searches the dataset for any duplicated values in one of the columns created by the undefined address function (Uncompressed PK, Compressed PK, Legacy Address, Segwit Address)
 # If any transactions share a duplicate and have missing values in any one of these observations, the missings will be overwritten by the non missing information in the other transactions.
