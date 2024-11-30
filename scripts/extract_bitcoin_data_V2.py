@@ -135,7 +135,7 @@ def extract_blocks_and_transactions(start_height, chunk_size=chunksize):
             for tx in block['tx']:
                 base_tx_data = {key: tx[key] for key in ["txid", "blockhash", "size", "version", "locktime"] if key in tx}
                 base_tx_data['blockhash'] = blockhash
-
+                base_tx_data['mempool_time'] = rpc_request("getmempoolentry", [tx["txid"]])["time"]
                 tx_entry = base_tx_data.copy()
                 tx_entry.update(get_vin(tx.get("vin", [])))
                 tx_entry.update(get_vout(tx.get("vout", [])))
