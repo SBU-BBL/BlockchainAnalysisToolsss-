@@ -117,7 +117,7 @@ def extract_blocks_and_transactions(start_height, chunk_size=chunksize):
     """
     Extracts block and transaction data from a specific start height to the latest block.
     """
-    block_fieldnames = ["hash", "confirmations", "size", "height", "version", "merkleroot", "time", "nonce", "bits", "difficulty", "previousblockhash", "nextblockhash"]
+    block_fieldnames = ["hash", "confirmations", "size", "height", "version", "merkleroot", "time", "mediantime", "nonce", "bits", "difficulty", "previousblockhash", "nextblockhash"]
     end_height = rpc_request("getblockcount")['result']
     
     for chunk_start in range(start_height, end_height + 1, chunk_size):
