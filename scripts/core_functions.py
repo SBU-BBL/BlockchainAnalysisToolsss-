@@ -122,3 +122,45 @@ def extractPublicKeysToAddresses(transactions, vout_type = "vout_scriptPubKey_ty
                 public_keys = parsePushData(tx[vout_asm][i], individuals_in_list = False)
                 tx[vout_address][i] = public_keys
     return transactions
+
+####################################################################################################
+# Inputs a lists of lists with partially duplicated items and returns the largest list of unique values associated with each of those partial duplicates.
+def unionFind(lists):
+        parent = {}
+        rank = {}
+        
+        def find(x):
+            if parent[x] != x:
+                parent[x] = find(parent[x])  # Call recursively for speed! :P
+            return parent[x]
+
+        def union(x, y):
+            rootX = find(x)
+            rootY = find(y)
+            if rootX != rootY:
+                if rank[rootX] > rank[rootY]:
+                    parent[rootY] = rootX
+                elif rank[rootX] < rank[rootY]:
+                    parent[rootX] = rootY
+                else:
+                    parent[rootY] = rootX
+                    rank[rootX] += 1
+
+        all_items = set(item for lst in lists for item in lst)
+        for item in all_items:
+            parent[item] = item
+            rank[item] = 0
+
+        for lst in lists:
+            for i in range(len(lst) - 1):
+                union(lst[i], lst[i + 1])
+
+        #Assign items to the same group by root, this is the complete set of merged lists.
+        groups = {}
+        for item in all_items:
+            root = find(item)
+            if root not in groups:
+                groups[root] = []
+            groups[root].append(item)
+
+        return list(groups.values())
