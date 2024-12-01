@@ -45,12 +45,19 @@ def parseJsonToDB(data, db_path):
                     )
                 vin_txid = record.get('vin_txid', None)
                 vin_vout = record.get('vin_vout', None)
-                for index in range(len(vin_vout)):
-
+                if vin_vout is not None:
+                    for index in range(len(vin_vout)):
+                
+                        cursor.execute("""
+                            INSERT INTO inputs (txid, vin_txid, vin_vout)
+                            VALUES (?, ?, ?)""",
+                            (record['txid'], vin_txid[index], vin_vout[index])
+                        )
+                else:
                     cursor.execute("""
                         INSERT INTO inputs (txid, vin_txid, vin_vout)
                         VALUES (?, ?, ?)""",
-                        (record['txid'], vin_txid[index], vin_vout[index])
+                        (record['txid'], vin_txid, vin_vout)
                     )
                 
             except Exception as e:
