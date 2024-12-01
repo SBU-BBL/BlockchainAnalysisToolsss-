@@ -164,3 +164,33 @@ def unionFind(lists):
             groups[root].append(item)
 
         return list(groups.values())
+####################################################################################################
+import re
+
+def parseDescs(descriptor):
+    # Parses a descriptor for explicitly defined pubkeys or addresses. Returns a list.
+    ## TODO: Add more for taproot and stuff
+    # re expressions to classify type based off of descriptor patterns
+    patterns = {
+        'address': r"addr\(([a-zA-Z0-9]+)\)",
+        'public_key': r"(pk|pkh|wpkh|tr|combo|rawtr)\(([0-9A-Fa-f]{64,130})\)",
+        'multisig': r"(multi|sortedmulti|multi_a|sortedmulti_a)\(\d+,((?:[0-9A-Fa-f]{64,130},?)+)\)"
+    }
+    results = []
+    
+    # Check for an explicitly defined address.
+    address_matches = re.findall(patterns['address'], descriptor)
+    results.extend(address_matches)
+    
+    # Check for regular public key esque patterns
+    public_key_matches = re.findall(patterns['public_key'], descriptor)
+    results.extend([match[1] for match in public_key_matches])
+    
+    # Check for multisig esque patterns
+    # Returns a > 1 length list for multisigs.
+    multisig_matches = re.findall(patterns['multisig'], descriptor)
+    for match in multisig_matches:
+        keys = match[1].split(',')
+        results.extend(keys)
+    
+    return results
