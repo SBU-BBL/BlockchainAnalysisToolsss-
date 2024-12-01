@@ -5,6 +5,8 @@
 ### Written by Dr. Keli Xiao
 ### Updated by Noah Tover
 
+### TODO: Add option for saving to database instead of JSON.
+
 import os
 import csv
 import json
