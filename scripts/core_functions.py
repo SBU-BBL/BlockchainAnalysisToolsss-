@@ -167,7 +167,7 @@ def unionFind(lists):
 ####################################################################################################
 import re
 
-def parseDescs(descriptor):
+def parseDesc(descriptor):
     # Parses a descriptor for explicitly defined pubkeys or addresses. Returns a list.
     ## TODO: Add more for taproot and stuff
     # re expressions to classify type based off of descriptor patterns
