@@ -5,23 +5,38 @@ CREATE TABLE transactions (
 );
 
 CREATE TABLE outputs (
-    indexing_id INTEGER PRIMARY KEY AUTOINCREMENT,
     txid TEXT NOT NULL,
+    vout_n INTEGER NOT NULL,
     vout_value REAL,
-    vout_n INTEGER,
     vout_scriptPubKey_asm TEXT,
     vout_scriptPubKey_desc TEXT,
     vout_scriptPubKey_hex TEXT,
     vout_scriptPubKey_address TEXT,
     vout_scriptPubKey_type TEXT,
+    vout_wallet_ID varchar(256),
+    PRIMARY KEY (txid, vout_n),
     FOREIGN KEY (txid) REFERENCES transactions (txid)
+);
+
+
+CREATE TABLE output_hashes (
+    txid TEXT NOT NULL,
+    vout_n INTEGER NOT NULL,
+    address TEXT NOT NULL,
+    PRIMARY KEY (txid, vout_n, address),
+    FOREIGN KEY (txid, vout_n) REFERENCES outputs (txid, vout_n)
 );
 
 CREATE TABLE inputs (
-    indexing_id2 INTEGER PRIMARY KEY AUTOINCREMENT,
     txid TEXT NOT NULL,
-    vin_txid TEXT,
-    vin_vout INTEGER,
-    FOREIGN KEY (txid) REFERENCES transactions (txid)
+    vin_txid TEXT NULL,
+    vin_vout INTEGER NULL,
+    PRIMARY KEY (txid, vin_txid, vin_vout),
+    FOREIGN KEY (vin_txid, vin_vout) REFERENCES outputs (txid, vout_n)
 );
 
+CREATE TABLE normalized_hashes (
+	hash TEXT NOT NULL,
+	root_hash varchar(256) NOT NULL
+	PRIMARY KEY (hash)
+)
