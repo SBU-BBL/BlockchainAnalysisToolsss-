@@ -38,5 +38,5 @@ CREATE TABLE inputs (
 CREATE TABLE normalized_hashes (
 	hash TEXT NOT NULL,
 	root_hash varchar(256) NOT NULL
-	PRIMARY KEY (hash)
+	FOREIGN KEY (hash) REFERENCES output_hashes (address)
 )
