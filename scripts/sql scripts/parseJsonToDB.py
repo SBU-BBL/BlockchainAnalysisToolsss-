@@ -124,3 +124,37 @@ def fillOutputHashes(db_path):
     conn.close()
 
 fillOutputHashes(db_path = r"E:\transactions_database")
+########################################################################################################################
+def fillNormalizedHashes(db_path):
+    connection = sqlite3.connect(db_path)
+    cursor = connection.cursor()
+
+    batch_size = 5000
+    offset = 0
+
+    while True:
+        cursor.execute(f"""
+            SELECT DISTINCT address
+            FROM output_hashes
+            WHERE type = 'pubkey'
+            LIMIT {batch_size} OFFSET {offset};
+        """)
+        rows = cursor.fetchall()
+        
+        if not rows:
+            break  
+
+        normalized_data = normalizeHashes(rows)
+
+        # Insert normalized data into normalized_hashes table
+        for address, root_hash in normalized_data.items():
+            cursor.execute("""
+                INSERT INTO normalized_hashes (hash, root_hash)
+                VALUES (?, ?);
+            """, (address, root_hash))
+
+        connection.commit()
+        offset += batch_size
+
+    connection.close()
+
