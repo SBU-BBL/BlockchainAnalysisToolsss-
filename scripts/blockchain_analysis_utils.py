@@ -8,11 +8,15 @@
 # This function creates a dictionary mapping different types of hashes to their highest level hash in the blockchain - most commonly public keys.
 # This ensures we have base truth "clusters" before cluster heuristics.
 # Assumes data is stored in the expected database schema - see documentation folder
+import hashlib
 def normalizeHashes(unique_pubkeys):
     # Derive all conventional address types from each public key. Assume all multisig public keys belong to the same wallet.
     # TODO: Write code to get unique pubkeys- multisig addresses contained in any other multisig address list are not unique
-    newly_defined_addresses = unique_pubkeys.apply(deriveUndefinedAddresses, assume_multisig_owned = True)
-
+    newly_defined_addresses = [
+        deriveUndefinedAddresses(pubkey, assume_multisig_owned=True)
+        for pubkey in unique_pubkeys
+    ]
+    
     # Create a dictionary to map each hash to a unique ID
     hash_dictionary = {}    
     for each in newly_defined_addresses:
