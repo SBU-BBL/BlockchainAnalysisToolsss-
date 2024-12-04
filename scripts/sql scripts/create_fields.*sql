@@ -31,6 +31,7 @@ CREATE TABLE inputs (
     txid TEXT NOT NULL,
     vin_txid TEXT NULL,
     vin_vout INTEGER NULL,
+    vin_wallet_ID TEXT,
     PRIMARY KEY (txid, vin_txid, vin_vout),
     FOREIGN KEY (vin_txid, vin_vout) REFERENCES outputs (txid, vout_n)
 );
