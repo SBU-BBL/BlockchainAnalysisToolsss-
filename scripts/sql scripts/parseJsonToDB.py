@@ -111,13 +111,9 @@ def fillOutputHashes(db_path):
                 # Parse the descriptor to get the address or list of addresses
                 parsed_result = parseDesc(desc)
                 # Multisig descriptors have a list of keys, for this exception multiple rows should exist in output_hashes to conform to normal form.
-                if isinstance(parsed_result, list) and scriptPubKey_type == "multisig":
-                    addresses_to_use = parsed_result  # Multiple addresses for multisig
-                else:
-                    addresses_to_use = [parsed_result]  # Turn single address to list to make it generalizable.
-
+            
             # Insert rows into the output_hashes table for each address
-            for addr in addresses_to_use:
+            for addr in parsed_result:
                 cursor.execute("""
                     INSERT INTO output_hashes (txid, vout_n, address)
                     VALUES (?, ?, ?);
