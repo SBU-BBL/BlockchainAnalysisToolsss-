@@ -81,12 +81,18 @@ def fillOutputHashes(db_path):
     offset = 0
     
     while True:
-        # Fetch all rows with well defined hashes
-        # TODO: Add more supported type
+        # Fetch a chunk of rows with well defined hashes
+        # TODO: Add more supported types
         cursor.execute(f"""
             SELECT txid, vout_n, vout_scriptPubKey_address, vout_scriptPubKey_desc, vout_scriptPubKey_type
             FROM outputs
             WHERE vout_scriptPubKey_type IN ('pubkey', 'pubkeyhash', 'multisig')
+            AND NOT EXISTS (
+                SELECT 1
+                FROM output_hashes
+                WHERE outputs.txid = output_hashes.txid
+                AND outputs.vout_n = output_hashes.vout_n
+            )
             LIMIT {batch_size} OFFSET {offset};
         """)
         rows = cursor.fetchall()
