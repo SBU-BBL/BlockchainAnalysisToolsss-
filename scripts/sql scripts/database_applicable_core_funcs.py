@@ -85,6 +85,138 @@ def fillNormalizedHashes(db_path):
 
         connection.commit()
         offset += batch_size
+########################################################################################################################
+import sqlite3
+import shelve
+import os
+
+def commonSpendCluster(database_path, visited_shelve_path=None, print_every=40, batch_size=10000):
+    """
+     Perform common spend clustering to group vin_wallet_IDs that appear together in transaction inputs via depth first search.
+
+    Arguments:
+    - database_path (str): Path to the SQLite database file.
+    - visited_shelve_path (str): Path to the shelve database used for storing visited nodes and cluster IDs, if it exists. Otherwise one will be created.
+    - print_every (int): How often to print how many clusters have been processed.
+    - batch_size (int): The size of batches to process at once.
+    Returns:
+    - Adds a table to the database called "csc_clusters". The primary (foreign) key being the wallet_ID, the other value being the cluster to which it is assigned.
+    NOTE: This code is extremely slow. Neo4j is a more appropriate way of doing this, but to expedite things (ironically) I wrote this code so we can do it w/o admin priviledges.
+    """
+
+    def get_neighbors(vin_wallet_ID, conn):
+        """Retrieve neighboring vin_wallet_IDs that share transactions with the given vin_wallet_ID."""
+        neighbors = []
+        neighbor_offset = 0
+        while True:
+            cursor = conn.cursor()
+            cursor.execute(f'''
+            SELECT DISTINCT i2.vin_wallet_ID
+            FROM inputs i1
+            JOIN inputs i2 ON i1.txid = i2.txid
+            WHERE i1.vin_wallet_ID = ?
+              AND i2.vin_wallet_ID IS NOT NULL
+              AND i2.vin_wallet_ID != i1.vin_wallet_ID
+            LIMIT {batch_size} OFFSET {neighbor_offset}
+            ''', (vin_wallet_ID,))
+            rows = cursor.fetchall()
+            if not rows:
+                break
+            for row in rows:
+                neighbors.append(row[0])
+            neighbor_offset += batch_size
+        return neighbors
+
+    # Connect to the SQLite database
+    conn = sqlite3.connect(database_path)
+    cursor = conn.cursor()
+
+    # Create or open the visited shelve database
+    if visited_shelve_path is None:
+        visited_shelve_path = 'visited_shelve.db'
+    visited_db = shelve.open(visited_shelve_path)
+
+    # Create the csc_clusters table if it doesn't exist
+    # Assuming output_hashes table exists with a wallet_ID primary key
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS csc_clusters (
+        wallet_ID TEXT PRIMARY KEY,
+        cluster_id INTEGER,
+        FOREIGN KEY(wallet_ID) REFERENCES output_hashes(wallet_ID)
+    )
+    ''')
+    conn.commit()
+
+    cluster_id = 0  # Initialize cluster ID
+    processed_count = 0
+
+    print("Starting depth first search to find clusters...")
+
+    # Retrieve all unique vin_wallet_IDs in batches using LIMIT/OFFSET
+    offset = 0
+    while True:
+        cursor.execute(f'''
+        SELECT DISTINCT vin_wallet_ID
+        FROM inputs
+        WHERE vin_wallet_ID IS NOT NULL
+        LIMIT {batch_size} OFFSET {offset}
+        ''')
+        rows = cursor.fetchall()
+        if not rows:
+            break
+        # Implement depth first
+        for (vin_wallet_ID,) in rows:
+            if vin_wallet_ID not in visited_db:
+                cluster_id += 1  
+                stack = [vin_wallet_ID]
+
+                while stack:
+                    current_vin_wallet_ID = stack.pop()
+                    if current_vin_wallet_ID not in visited_db:
+                        visited_db[current_vin_wallet_ID] = cluster_id
+
+                        neighbors = get_neighbors(current_vin_wallet_ID, conn)
+
+                        # Add unvisited neighbors to the stack
+                        for neighbor in neighbors:
+                            if neighbor not in visited_db:
+                                stack.append(neighbor)
+
+                processed_count += 1
+                if processed_count % print_every == 0:
+                    print(f"Processed {processed_count} clusters...")
+
+        offset += batch_size
+
+    print("DFS traversal complete.")
+
+    # Insert the cluster results into the csc_clusters table
+    visited_db.close()
+    visited_db = shelve.open(visited_shelve_path, flag='r')
+
+    insert_batch = []
+    for vin_wallet_ID, cid in visited_db.items():
+        insert_batch.append((vin_wallet_ID, cid))
+        if len(insert_batch) >= batch_size:
+            cursor.executemany('INSERT OR REPLACE INTO csc_clusters (wallet_ID, cluster_id) VALUES (?,?)', insert_batch)
+            conn.commit()
+            insert_batch.clear()
+
+    # Insert any remaining records
+    if insert_batch:
+        cursor.executemany('INSERT OR REPLACE INTO csc_clusters (wallet_ID, cluster_id) VALUES (?,?)', insert_batch)
+        conn.commit()
+
+    visited_db.close()
+    conn.close()
+
+    # Get rid of all the temp files we used! Woohoo
+    for filename in [visited_shelve_path, visited_shelve_path + '.db', visited_shelve_path + '.dat', visited_shelve_path + '.dir', visited_shelve_path + '.bak']:
+        if os.path.exists(filename):
+            os.remove(filename)
+
+    print("Common spend clustering completed and added to database! :D")
+    return 
 
     connection.close()
 
