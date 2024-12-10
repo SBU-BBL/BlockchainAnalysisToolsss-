@@ -27,6 +27,7 @@ The former simply parses all public keys and stores them in the output_hashes ta
 ```
 commonSpendCluster(db_path = "YOUR_PATH_HERE")
 ```
+5. Functionality also exists for matching inputs to outputs (although this violates the 3rd normal form), parsing ASMs, and other various miscellaneous tasks.
 ### Definitions:
 Normalized Hash:
 A Bitcoin public key can be hashed in several ways. For example, pubkey1 -> legacyaddr1 & pubkey1 -> otheraddr1. Further, some transactions contain several public keys for a single output, such as multisigs. In linking transactions via heuristic clustering, it is first necessary to link public keys to all of their child nodes via a unique identifier. This is also known as a normalized hash.
