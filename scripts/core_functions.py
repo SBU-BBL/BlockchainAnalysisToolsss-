@@ -3,11 +3,20 @@ import bitcoinlib
 import pandas as pd
 # The following modules can be used to link heterogenous transactions as belonging to a specific wallet in Bitcoin blockchain transaction data.
 #######################################################################################################
-# Creates a dictionary of derived addressed and compressed and uncompressed version(s) of the pubkey(s)
-# If assume_multisig_owned is False, nested lists will be returned representing each public key's defined addresses so they can be treated separately.
-def deriveUndefinedAddresses(pubkey, assume_multisig_owned = True):
-  # To do: Add exception to see if functions needed are imported
-  # Determine if pubkey is compressed or uncompressed
+def deriveUndefinedAddresses(pubkey, assume_multisig_owned = True, n_childkeys = 2):
+  '''
+  Creates a dictionary of derived addresses and compressed and uncompressed version(s) of the pubkey(s). This is a base truth hash tree.
+  To be pedantic, these hashes are not "owned" by the controller of the public key (as multiple entities may share a public key), however they are controlled by them.
+  If assume_multisig_owned is False, nested lists will be returned representing each public key's defined addresses so they can be treated separately.
+  Assuming that a multisig "owns" all wallets it specifies is implicit common spend clustering, so it must be an exception. 
+  n_childkeys specifies the number of childkeys to derive from an extended public key. There are a near infinite amount, so the default is small.
+  DEPENDENCY: Multisig pubkeys should be passed in as lists, or individually.
+  '''
+  def is_extended_pubkey(k):
+    # Check common prefixes of extended pubkeys. 
+    # It is better practice to just see if an HDkey import fails, but because these keys make up so little of the data, I will only support these for speed.
+    return k.startswith('xpub') or k.startswith('tpub') or k.startswith('ypub') or k.startswith('zpub') or k.startswith('vpub')
+  # Determine if pubkey input is compressed or uncompressed, and then get the other version.
   def deriveIndividualAddresses(ith_key):
     key = bitcoinlib.keys.Key(import_key = ith_key)
     if key.compressed == True:
@@ -21,21 +30,43 @@ def deriveUndefinedAddresses(pubkey, assume_multisig_owned = True):
     segwit_address = compressed_key.address(encoding = 'bech32', script_type = 'p2wpkh')
     defined_addresses = [key.public_uncompressed_hex, key.public_compressed_hex, legacy_address, segwit_address]
     return defined_addresses
-    
-  # Dependency - pubkeys should be lists for multisig support.
+  def derive_from_extended(xpub):
+  xpub_defined_addresses = []
+  hdkey = bitcoinlib.keys.HDKey(import_key=xpub)
+  for i in range(n_childkeys):
+      child_hdkey = hdkey.child(i)
+      child_key_obj = child_hdkey.key()
+      # Use the child's public key hex to derive addresses
+      # The public key hex in compressed form can be obtained from child_key_obj.public_hex
+      child_pub_hex = child_key_obj.public_hex
+      xpub_defined_addresses = xpub_defined_addresses + deriveIndividualAddresses(child_pub_hex) + [child_pub_hex, child_key_obj.public_compressed_hex]
+  return xpub_defined_addresses
   address_list = []
   if isinstance(pubkey, list):
     for each_key in pubkey:
-      ithkey_addresses = deriveIndividualAddresses(each_key)
-      address_list.append(ithkey_addresses)
+        if is_extended_pubkey(each_key):
+            # For an xpub, derive multiple child keys
+            xpub_addresses = derive_from_extended(each_key)
+            address_list.append(xpub_addresses)
+        else:
+            # Normal key, just derive addresses
+            ithkey_addresses = deriveIndividualAddresses(each_key)
+            address_list.append(ithkey_addresses)
     if assume_multisig_owned:
-      address_list = [each for sublist in address_list for each in sublist]
+        # Flattens the list of lists.
+        flattened = []
+        for item in address_list:
+            if isinstance(item, list):
+                for sub in item:
+                    flattened.extend(sub)
+            else:
+                flattened.extend(item)
+        address_list = flattened
   else:
     addresses = deriveIndividualAddresses(pubkey)
     address_list.append(addresses)
     
-  address_tuple = tuple(address_list) # Store as tuple. No addresses should be added, speeds matching.
-  return address_tuple
+  return address_list
 ####################################################################################################
 # This function searches the dataset for any duplicated values in one of the columns created by the undefined address function (Uncompressed PK, Compressed PK, Legacy Address, Segwit Address)
 # If any transactions share a duplicate and have missing values in any one of these observations, the missings will be overwritten by the non missing information in the other transactions.
