@@ -193,7 +193,7 @@ def parseDesc(descriptor: str):
     )
 
     matches = key_pattern.findall(descriptor)
-    # Returns a list. Some descriptors contain multisigs.
+    # Returns a list. Some descriptors contain multiple public keys.
     keys = [key for (origin, key) in matches]
     return keys
 
