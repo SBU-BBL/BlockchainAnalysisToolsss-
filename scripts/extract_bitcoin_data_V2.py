@@ -96,7 +96,7 @@ def process_transactions(block, conn):
         get_vin(tx.get("vin", []), txid, conn)
         get_vout(tx.get("vout", []), txid, conn)
 
-def extract_blocks_and_transactions_DB(start_height, chunk_size=chunksize):
+def createBlockchainTxnDatabase(start_height, chunk_size=chunksize):
     conn = sqlite3.connect(database_path)
     conn.execute("PRAGMA foreign_keys = ON;")  # Ensure FK constraints in SQLite
     
@@ -121,7 +121,7 @@ def extract_blocks_and_transactions_DB(start_height, chunk_size=chunksize):
     
 def main():
     start_height = int(input("Enter the starting block height: "))
-    extract_blocks_and_transactions_DB(start_height)
+    createBlockchainTxnDatabase(start_height)
 
 if __name__ == "__main__":
     main()
