@@ -167,30 +167,33 @@ def unionFind(lists):
 ####################################################################################################
 import re
 
-def parseDesc(descriptor):
-    # Parses a descriptor for explicitly defined pubkeys or addresses. Returns a list.
-    ## TODO: Add more for taproot and stuff
-    # re expressions to classify type based off of descriptor patterns
-    patterns = {
-        'address': r"addr\(([a-zA-Z0-9]+)\)",
-        'public_key': r"(pk|pkh|wpkh|tr|combo|rawtr)\(([0-9A-Fa-f]{64,130})\)",
-        'multisig': r"(multi|sortedmulti|multi_a|sortedmulti_a)\(\d+,((?:[0-9A-Fa-f]{64,130},?)+)\)"
-    }
-    results = []
-    
-    # Check for an explicitly defined address.
-    address_matches = re.findall(patterns['address'], descriptor)
-    results.extend(address_matches)
-    
-    # Check for regular public key esque patterns
-    public_key_matches = re.findall(patterns['public_key'], descriptor)
-    results.extend([match[1] for match in public_key_matches])
-    
-    # Check for multisig esque patterns
-    # Returns a > 1 length list for multisigs.
-    multisig_matches = re.findall(patterns['multisig'], descriptor)
-    for match in multisig_matches:
-        keys = match[1].split(',')
-        results.extend(keys)
-    
-    return results
+def parseDesc(descriptor: str):
+  '''
+  Function capable of parsing descriptors with explicity defined public keys. Capable of dealing with nested descriptors. Can parse script, tree, and key expressions.
+  '''
+    # Remove whitespace
+    descriptor = descriptor.replace(" ", "")
+    # Remove checksum information
+    if "#" in descriptor:
+        descriptor = descriptor.split("#", 1)[0]
+
+    # re expressions to classify public key(s) based on script, tree, and key expressions. 
+    # Subsets key - all irrelevant brackets and whatnot are ignored, ensuring only the relevant key is returned.
+    # Source: "Support for Output Descriptors in Bitcoin Core" https://github.com/bitcoin/bitcoin/blob/master/doc/descriptors.md
+
+    key_pattern = re.compile(
+        r'(\[[0-9A-Fa-f]{8}(?:/[0-9]+\'?)*\])?'    # Optional key origin
+        r'('
+        r'(?:xpub|xprv|tpub|tprv|[A-Za-z0-9]{4}pub)[A-Za-z0-9]+(?:/[0-9]+\'?)*(?:/\*)?\'?' # Extended keys 
+        r'|0[2-3][0-9A-Fa-f]{64}'      # Compressed pubkey
+        r'|04[0-9A-Fa-f]{128}'         # Uncompressed pubkey
+        r'|[0-9A-Fa-f]{64}'            # X-only key or 64-char hex key
+        r'|[1-9A-HJ-NP-Za-km-z]{50,52}' # WIF key
+        r')'
+    )
+
+    matches = key_pattern.findall(descriptor)
+    # Returns a list. Some descriptors contain multisigs.
+    keys = [key for (origin, key) in matches]
+    return keys
+
