@@ -98,7 +98,7 @@ def fillOutputHashes(db_path):
         rows = cursor.fetchall()
 
         if not rows:
-            print(offset, 'to', offset + batch_size, 'rows processed', sep = ' ')
+            print('Around', offset, 'rows processed', sep = ' ')
             break  # Stop the loop when all rows have been processed.
 
         for row in rows:
