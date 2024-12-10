@@ -37,3 +37,4 @@ Transaction:
 The locking and unlocking of an unspent transaction output (UTXO) via a script. Most commonly, hashes of the private key are used. 
 ### Incoming Updates
 1.) Neo4j support - just need to request admin permission for install. This will allow for things like rolling temporal clustering and significantly faster common spend clustering.
+2.) Eigenvalue centrality and exchange cluster identification.
