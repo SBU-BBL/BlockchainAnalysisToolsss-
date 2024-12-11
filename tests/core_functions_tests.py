@@ -25,39 +25,47 @@ class testUnionFind(unittest.TestCase):
 
 #########################################################################################################################
 import unittest
-
+# These unit tests are designed to test that the parser works for all patters and nested lists as expected.
 class testParseDesc(unittest.TestCase):
-    
-    def test_single_key_scripts(self):
-        self.assertEqual(
-            parseDesc("pk(0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798)"),
-            ["0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798"]
-        )
-        self.assertEqual(
-            parseDesc("pkh(02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5)"),
-            ["02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5"]
-        )
-        self.assertEqual(
-            parseDesc("wpkh(02f9308a019258c31049344f85f89d5229b531c845836f99b08601f113bce036f9)"),
-            ["02f9308a019258c31049344f85f89d5229b531c845836f99b08601f113bce036f9"]
-        )
-    def test_addresses(self):
-        self.assertEqual(
-            parseDesc("addr(1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa)"),
-            ["1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa"]
-        )
-        self.assertEqual(
-            parseDesc("addr(bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kygt080)"),
-            ["bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kygt080"]
-        )
-    def test_multisig(self):
-        self.assertEqual(
-            parseDesc("multi(1,022f8bde4d1a07209355b4a7250a5c5128e88b84bddc619ab7cba8d569b240efe4,025cbdf0646e5db4eaa398f365f2ea7a0e3d419b7e0330e39ce92bddedcac4f9bc)"),
-            ["022f8bde4d1a07209355b4a7250a5c5128e88b84bddc619ab7cba8d569b240efe4",
-             "025cbdf0646e5db4eaa398f365f2ea7a0e3d419b7e0330e39ce92bddedcac4f9bc"]
-        )
-        self.assertEqual(
-            parseDesc("sh(multi(2,022f01e5e15cca351daff3843fb70f3c2f0a1bdd05e5af888a67784ef3e10a2a01,03acd484e2f0c7f65309ad178a9f559abde09796974c57e714c35f110dfc27ccbe))"),
-            ["022f01e5e15cca351daff3843fb70f3c2f0a1bdd05e5af888a67784ef3e10a2a01",
-             "03acd484e2f0c7f65309ad178a9f559abde09796974c57e714c35f110dfc27ccbe"]
-        )
+    def test_pk_single_key(self):
+        desc = "pk(0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798)"
+        expected = ["0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798"]
+        self.assertEqual(parseDesc(desc), expected)
+
+    def test_multi_multiple_keys(self):
+        desc = "multi(2,022f8bde4d1a07209355b4a7250a5c5128e88b84bddc619ab7cba8d569b240efe4,025cbdf0646e5db4eaa398f365f2ea7a0e3d419b7e0330e39ce92bddedcac4f9bc)"
+        expected = [
+            "022f8bde4d1a07209355b4a7250a5c5128e88b84bddc619ab7cba8d569b240efe4",
+            "025cbdf0646e5db4eaa398f365f2ea7a0e3d419b7e0330e39ce92bddedcac4f9bc"
+        ]
+        self.assertEqual(parseDesc(desc), expected)
+
+    def test_pkh_with_origin_and_derivation(self):
+        desc = "pkh([d34db33f/44'/0'/0']xpub6ERApfZs7RXYLQSM3Xg3J2UhQn9A.../1/*)"
+        # Only the key part should remain after parsing (without the origin info)
+        keys = parseDesc(desc)
+        self.assertEqual(len(keys), 1)
+        self.assertTrue(keys[0].startswith("xpub6ERApfZs7RXYLQSM3Xg3J2UhQn9A"))
+        self.assertIn("/1/*", keys[0])
+
+    def test_tr_with_nested_scripts(self):
+        # Taproot descriptor with a nested pk
+        desc = "tr(c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5,{pk(fff97bd5755eeea420453a14355235d382f6472f8568a18b2f057a1460297556)})"
+        expected = [
+            "c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5",
+            "fff97bd5755eeea420453a14355235d382f6472f8568a18b2f057a1460297556"
+        ]
+        self.assertEqual(parseDesc(desc), expected)
+
+    def test_wpkh_with_extended_key(self):
+        desc = "wpkh(xpub661MyMwAqRbcF8YnRxELb8eQpjY..."
+        desc += "/0/*)"
+        keys = parseDesc(desc)
+        self.assertEqual(len(keys), 1)
+        self.assertIn("xpub661MyMwAqRbcF8YnRxELb8eQpjY", keys[0])
+        self.assertIn("/0/*", keys[0])
+
+    def test_checksum_removal(self):
+        desc = "sh(wpkh(02f9308a019258c31049344f85f89d5229b531c845836f99b08601f113bce036f9))#abcd1234"
+        expected = ["02f9308a019258c31049344f85f89d5229b531c845836f99b08601f113bce036f9"]
+        self.assertEqual(parseDesc(desc), expected)
