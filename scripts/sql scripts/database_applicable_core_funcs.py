@@ -86,6 +86,7 @@ def fillOutputHashes(db_path):
 fillOutputHashes(db_path = r"E:\transactions_database")
 ########################################################################################################################
 # TODO: Make these functions general.
+# DEPENDENCIES: normalizeHashes function, import bitcoinlib, pandas as pd, deriveUndefinedAddresses function
 def fillNormalizedHashes(db_path):
     connection = sqlite3.connect(db_path)
     cursor = connection.cursor()
