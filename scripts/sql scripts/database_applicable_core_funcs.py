@@ -1,5 +1,36 @@
 # This function fills in the output hashes table by parsing the descriptor when necessary
+import re
 def fillOutputHashes(db_path):
+    def parseDesc(descriptor: str):
+      '''
+      Function capable of parsing descriptors with explicity defined public keys. Capable of dealing with nested descriptors. Can parse script, tree, and key expressions.
+      '''
+        # Remove whitespace
+        descriptor = descriptor.replace(" ", "")
+        # Remove checksum information
+        if "#" in descriptor:
+            descriptor = descriptor.split("#", 1)[0]
+    
+        # re expressions to classify public key(s) based on script, tree, and key expressions. 
+        # Subsets key - all irrelevant brackets and whatnot are ignored, ensuring only the relevant key is returned.
+        # Source: "Support for Output Descriptors in Bitcoin Core" https://github.com/bitcoin/bitcoin/blob/master/doc/descriptors.md
+    
+        key_pattern = re.compile(
+            r'(\[[0-9A-Fa-f]{8}(?:/[0-9]+\'?)*\])?'    # Optional key origin
+            r'('
+            r'(?:xpub|xprv|tpub|tprv|[A-Za-z0-9]{4}pub)[A-Za-z0-9]+(?:/[0-9]+\'?)*(?:/\*)?\'?' # Extended keys 
+            r'|0[2-3][0-9A-Fa-f]{64}'      # Compressed pubkey
+            r'|04[0-9A-Fa-f]{128}'         # Uncompressed pubkey
+            r'|[0-9A-Fa-f]{64}'            # X-only key or 64-char hex key
+            r'|[1-9A-HJ-NP-Za-km-z]{50,52}' # WIF key
+            r')'
+        )
+    
+        matches = key_pattern.findall(descriptor)
+        # Returns a list. Some descriptors contain multiple public keys.
+        keys = [key for (origin, key) in matches]
+        return keys
+
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
 
