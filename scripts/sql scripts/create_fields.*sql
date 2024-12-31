@@ -1,7 +1,7 @@
 CREATE TABLE transactions (
     txid TEXT PRIMARY KEY,
     median_blocktime TIMESTAMP NULL,
-    mempool_time TIMESTAMP NULL
+    miner_time TIMESTAMP NULL
 );
 
 CREATE TABLE outputs (
@@ -20,8 +20,9 @@ CREATE TABLE outputs (
 CREATE TABLE output_hashes (
     txid TEXT NOT NULL,
     vout_n INTEGER NOT NULL,
-    address TEXT NOT NULL,
-    PRIMARY KEY (txid, vout_n, address),
+    vout_scriptPubKey_address TEXT NOT NULL,
+    vout_scriptPubKey_type TEXT NOT NULL,
+    PRIMARY KEY (txid, vout_n, vout_scriptPubKey_address),
     FOREIGN KEY (txid, vout_n) REFERENCES outputs (txid, vout_n)
 );
 
