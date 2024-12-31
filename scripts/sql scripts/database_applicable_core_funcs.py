@@ -1,47 +1,47 @@
-# This function fills in the output hashes table by parsing the descriptor when necessary
+from hashlib import sha256
+import bitcoinlib
+import pandas as pd
 import re
-def fillOutputHashes(db_path):
-    def parseDesc(descriptor: str):
-      '''
-      Function capable of parsing descriptors with explicity defined public keys. Capable of dealing with nested descriptors. Can parse script, tree, and key expressions.
-      '''
-        # Remove whitespace
-        descriptor = descriptor.replace(" ", "")
-        # Remove checksum information
-        if "#" in descriptor:
-            descriptor = descriptor.split("#", 1)[0]
-    
-        # re expressions to classify public key(s) based on script, tree, and key expressions. 
-        # Subsets key - all irrelevant brackets and whatnot are ignored, ensuring only the relevant key is returned.
-        # Source: "Support for Output Descriptors in Bitcoin Core" https://github.com/bitcoin/bitcoin/blob/master/doc/descriptors.md
-    
-        key_pattern = re.compile(
-            r'(\[[0-9A-Fa-f]{8}(?:/[0-9]+\'?)*\])?'    # Optional key origin
-            r'('
-            r'(?:xpub|xprv|tpub|tprv|[A-Za-z0-9]{4}pub)[A-Za-z0-9]+(?:/[0-9]+\'?)*(?:/\*)?\'?' # Extended keys 
-            r'|0[2-3][0-9A-Fa-f]{64}'      # Compressed pubkey
-            r'|04[0-9A-Fa-f]{128}'         # Uncompressed pubkey
-            r'|[0-9A-Fa-f]{64}'            # X-only key or 64-char hex key
-            r'|[1-9A-HJ-NP-Za-km-z]{50,52}' # WIF key
-            r')'
-        )
-    
-        matches = key_pattern.findall(descriptor)
-        # Returns a list. Some descriptors contain multiple public keys.
-        keys = [key for (origin, key) in matches]
-        return keys
 
+
+def parseDesc(descriptor: str):
+    # Remove whitespace
+    descriptor = descriptor.replace(" ", "")
+    # Remove checksum information
+    if "#" in descriptor:
+        descriptor = descriptor.split("#", 1)[0]
+    
+    # re expressions to classify public key(s) based on script, tree, and key expressions. 
+    # Subsets key - all irrelevant brackets and whatnot are ignored, ensuring only the relevant key is returned.
+    # Source: "Support for Output Descriptors in Bitcoin Core" https://github.com/bitcoin/bitcoin/blob/master/doc/descriptors.md
+    
+    key_pattern = re.compile(
+        r'(\[[0-9A-Fa-f]{8}(?:/[0-9]+\'?)*\])?'    # Optional key origin
+        r'('
+        r'(?:xpub|xprv|tpub|tprv|[A-Za-z0-9]{4}pub)[A-Za-z0-9]+(?:/[0-9]+\'?)*(?:/\*)?\'?' # Extended keys 
+        r'|0[2-3][0-9A-Fa-f]{64}'      # Compressed pubkey
+        r'|04[0-9A-Fa-f]{128}'         # Uncompressed pubkey
+        r'|[0-9A-Fa-f]{64}'            # X-only key or 64-char hex key
+        r'|[1-9A-HJ-NP-Za-km-z]{50,52}' # WIF key
+        r')'
+    )
+    
+    matches = key_pattern.findall(descriptor)
+    # Returns a list. Some descriptors contain multiple public keys.
+    keys = [key for (origin, key) in matches]
+    return keys
+
+def fillOutputHashes(db_path, chunk_size = 5000):
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
-
     # Grab chunks from outputs table
-    batch_size = 5000  # Process rows in batches
+    batch_size = chunk_size  # Process rows in batches
     offset = 0
-    
+    print('Beginning hash parsing...')
     while True:
         # Fetch a chunk of rows with well defined hashes
         # TODO: Add more supported types
-        cursor.execute(f"""
+        query = f"""
             SELECT txid, vout_n, vout_scriptPubKey_address, vout_scriptPubKey_desc, vout_scriptPubKey_type
             FROM outputs
             WHERE vout_scriptPubKey_type IN ('pubkey', 'pubkeyhash', 'multisig')
@@ -52,71 +52,146 @@ def fillOutputHashes(db_path):
                 AND outputs.vout_n = output_hashes.vout_n
             )
             LIMIT {batch_size} OFFSET {offset};
-        """)
-        rows = cursor.fetchall()
-
-        if not rows:
-            print('Around', offset, 'rows processed', sep = ' ')
-            break  # Stop the loop when all rows have been processed.
-
-        for row in rows:
-            txid, vout_n, address, desc, scriptPubKey_type = row
-
-            if address:
-                # If address exists, add it
-                addresses_to_use = [address]
-            else:
-                # Parse the descriptor to get the address or list of addresses
-                parsed_result = parseDesc(desc)
-                # Multisig descriptors have a list of keys, for this exception multiple rows should exist in output_hashes to conform to normal form.
-            
-            # Insert rows into the output_hashes table for each address
-            for addr in parsed_result:
-                cursor.execute("""
-                    INSERT INTO output_hashes (txid, vout_n, address)
-                    VALUES (?, ?, ?);
-                """, (txid, vout_n, addr))
+        """
+        df = pd.read_sql_query(query, conn)        
+        if df.empty:
+            print(f'Around {offset} rows processed')
+            break
+        
+        df['vout_scriptPubKey_address'] = df.apply(
+            lambda row: row['vout_scriptPubKey_address'] if row['vout_scriptPubKey_address'] else parseDesc(row['vout_scriptPubKey_desc']),
+            axis=1
+        )
+        df = df.explode('vout_scriptPubKey_address') # Treat multisigs as separate rows
+        
+        df[['txid', 'vout_n', 'vout_scriptPubKey_address', 'vout_scriptPubKey_type']].to_sql(
+        'output_hashes', conn, if_exists='append', index=False, 
+        method='multi')
 
         # Commit updates after processing each batch
+        print('Batch processed...')
         conn.commit()
         offset += batch_size
 
     conn.close()
-
-fillOutputHashes(db_path = r"E:\transactions_database")
 ########################################################################################################################
 # TODO: Make these functions general.
 # DEPENDENCIES: normalizeHashes function, import bitcoinlib, pandas as pd, deriveUndefinedAddresses function
+def deriveUndefinedAddresses(pubkey, assume_multisig_owned = True, n_childkeys = 2):
+  '''
+  Creates a dictionary of derived addresses and compressed and uncompressed version(s) of the pubkey(s). This is a base truth hash tree.
+  To be pedantic, these hashes are not "owned" by the controller of the public key (as multiple entities may share a public key), however they are controlled by them.
+  If assume_multisig_owned is False, nested lists will be returned representing each public key's defined addresses so they can be treated separately.
+  Assuming that a multisig "owns" all wallets it specifies is implicit common spend clustering, so it must be an exception. 
+  n_childkeys specifies the number of childkeys to derive from an extended public key. There are a near infinite amount, so the default is small.
+  DEPENDENCY: Multisig pubkeys should be passed in as lists, or individually.
+  '''
+  def is_extended_pubkey(k):
+    # Check common prefixes of extended pubkeys. 
+    # It is better practice to just see if an HDkey import fails, but because these keys make up so little of the data, I will only support these for speed.
+    return k.startswith('xpub') or k.startswith('tpub') or k.startswith('ypub') or k.startswith('zpub') or k.startswith('vpub')
+  # Determine if pubkey input is compressed or uncompressed, and then get the other version.
+  def deriveIndividualAddresses(ith_key):
+    key = bitcoinlib.keys.Key(import_key = ith_key)
+    if key.compressed == True:
+      uncompressed_key = bitcoinlib.keys.Key(import_key = key.public_uncompressed_hex)
+      compressed_key = key
+    else:
+      uncompressed_key = key
+      compressed_key = bitcoinlib.keys.Key(import_key = key.public_compressed_hex)
+      # To do: Add more address support.
+    legacy_address = uncompressed_key.address(encoding = 'base58', script_type = 'p2pkh')
+    segwit_address = compressed_key.address(encoding = 'bech32', script_type = 'p2wpkh')
+    defined_addresses = [key.public_uncompressed_hex, key.public_compressed_hex, legacy_address, segwit_address]
+    return defined_addresses
+  def derive_from_extended(xpub):
+      xpub_defined_addresses = []
+      hdkey = bitcoinlib.keys.HDKey(import_key=xpub)
+      for i in range(n_childkeys):
+          child_hdkey = hdkey.child(i)
+          child_key_obj = child_hdkey.key()
+          # Use the child's public key hex to derive addresses
+          # The public key hex in compressed form can be obtained from child_key_obj.public_hex
+          child_pub_hex = child_key_obj.public_hex
+          xpub_defined_addresses = xpub_defined_addresses + deriveIndividualAddresses(child_pub_hex) + [child_pub_hex, child_key_obj.public_compressed_hex]
+      return xpub_defined_addresses
+  address_list = []
+  if isinstance(pubkey, list):
+    for each_key in pubkey:
+        if is_extended_pubkey(each_key):
+            # For an xpub, derive multiple child keys
+            xpub_addresses = derive_from_extended(each_key)
+            address_list.append(xpub_addresses)
+        else:
+            # Normal key, just derive addresses
+            ithkey_addresses = deriveIndividualAddresses(each_key)
+            address_list.append(ithkey_addresses)
+    if assume_multisig_owned:
+        # Flattens the list of lists.
+        flattened = []
+        for item in address_list:
+            if isinstance(item, list):
+                for sub in item:
+                    flattened.extend(sub)
+            else:
+                flattened.extend(item)
+        address_list = flattened
+  else:
+    address_list = deriveIndividualAddresses(pubkey)
+    
+  return address_list
+
 def fillNormalizedHashes(db_path):
+    def normalizeHashes(unique_pubkeys):
+        # Derive all conventional address types from each public key. Assume all multisig public keys belong to the same wallet.
+        # TODO: Write code to get unique pubkeys- multisig addresses contained in any other multisig address list are not unique
+        newly_defined_addresses = [
+            deriveUndefinedAddresses(pubkey, assume_multisig_owned=True)
+            for pubkey in unique_pubkeys
+        ]
+        # Create a dictionary to map each hash to a unique ID
+        hash_dictionary = {}    
+        for each in newly_defined_addresses:
+            # Hash the components of this tuple. 
+            # This allows for homogenous unique IDs - hashes which cannot be mapped to any other hashes (their pubkey never is used in scripts) will be their own unique ID later on.
+            unique_id = sha256(str(tuple(each)).encode()).hexdigest()
+            # Map each individual hash in the tuple to the same unique ID
+            for hash_type in each:
+                if hash_type not in hash_dictionary:
+                    hash_dictionary[hash_type] = unique_id    
+                    
+        return hash_dictionary
+
     connection = sqlite3.connect(db_path)
-    cursor = connection.cursor()
 
     batch_size = 5000
     offset = 0
 
+    print('Beginning normalization...')
     while True:
-        cursor.execute(f"""
-            SELECT DISTINCT address
+        query = f"""
+            SELECT DISTINCT vout_scriptPubKey_address
             FROM output_hashes
-            WHERE type = 'pubkey'
+            WHERE vout_scriptPubKey_type = 'pubkey'
             LIMIT {batch_size} OFFSET {offset};
-        """)
-        rows = cursor.fetchall()
+        """
+        df = pd.read_sql_query(query, connection)
+
+        if df.empty:
+            print(f'Around {offset} rows processed')
+            break
         
-        if not rows:
-            break  
-
-        normalized_data = normalizeHashes(rows)
-
-        # Insert normalized data into normalized_hashes table
-        for address, root_hash in normalized_data.items():
-            cursor.execute("""
-                INSERT INTO normalized_hashes (hash, root_hash)
-                VALUES (?, ?);
-            """, (address, root_hash))
-
+        normalized_data = normalizeHashes(df['vout_scriptPubKey_address'].tolist())
+        
+        normalized_df = pd.DataFrame(list(normalized_data.items()), columns=['hash', 'root_hash'])
+        normalized_df.to_sql('normalized_hashes', connection, if_exists='append', index=False, method='multi')
+        
+        print('Batch processed...')
         connection.commit()
         offset += batch_size
+    
+    connection.close()
+    
 ########################################################################################################################
 import sqlite3
 import shelve
@@ -249,6 +324,3 @@ def commonSpendCluster(database_path, visited_shelve_path=None, print_every=40, 
 
     print("Common spend clustering completed and added to database! :D")
     return 
-
-    connection.close()
-
