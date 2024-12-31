@@ -72,7 +72,7 @@ def get_vout(vout, txid, conn):
             INSERT INTO outputs (
                 txid, vout_n, vout_value, vout_scriptPubKey_desc,
                 vout_scriptPubKey_address, vout_scriptPubKey_type
-            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?)
             """, 
             (txid, vout_n, vout_value, vout_scriptPubKey_desc, vout_scriptPubKey_address, vout_scriptPubKey_type)
         )
