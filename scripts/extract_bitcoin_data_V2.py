@@ -80,16 +80,16 @@ def get_vout(vout, txid, conn):
 def process_transactions(block, conn):
     for tx in block['tx']:
         txid = tx["txid"]
-        mempool_time = rpc_request("getmempoolentry", [txid]).get("time")
+        miner_time = block.get('time')
         median_blocktime = block.get("mediantime")
         
         
         conn.execute(
             """
-            INSERT INTO transactions (txid, median_blocktime, mempool_time)
+            INSERT INTO transactions (txid, median_blocktime, miner_time)
             VALUES (?, ?, ?)
             """, 
-            (txid, median_blocktime, mempool_time)
+            (txid, median_blocktime, miner_time)
         )
         
         # Process inputs and outputs
