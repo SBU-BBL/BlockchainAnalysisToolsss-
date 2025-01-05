@@ -31,6 +31,8 @@ CREATE TABLE inputs (
     vin_txid TEXT NULL,
     vin_vout INTEGER NULL,
     vin_wallet_ID TEXT,
+    vin_asm TEXT NULL,
+    witness_data TEXT NULL,
     PRIMARY KEY (txid, vin_txid, vin_vout),
     FOREIGN KEY (vin_txid, vin_vout) REFERENCES outputs (txid, vout_n)
 );
@@ -38,6 +40,5 @@ CREATE TABLE inputs (
 CREATE TABLE normalized_hashes (
     hash TEXT NOT NULL,
     root_hash TEXT NOT NULL,
-    FOREIGN KEY (hash) REFERENCES output_hashes (address)
 );
 
