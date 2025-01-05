@@ -49,13 +49,19 @@ def get_vin(vin, txid, conn):
     for each in vin:
         vin_txid = each.get("txid")
         vin_vout = each.get("vout")
+        vin_asm = each.get("scriptSig").get("asm", {})
+        witness = each.get("txinwitness", [])
+        # Collapse list of a strings into a single string with commas separating each.
+        witness_data = ", ".join(witness) if witness else {}
         conn.execute(
             """
-            INSERT INTO inputs (txid, vin_txid, vin_vout)
+            INSERT INTO inputs (txid, vin_txid, vin_vout, vin_asm, witness_data)
             VALUES (?, ?, ?)
             """, 
-            (txid, vin_txid, vin_vout)
+            (txid, vin_txid, vin_vout, vin_asm, witness_data)
         )
+        conn.commit()
+
         
 def get_vout(vout, txid, conn):
     if not vout:
@@ -76,29 +82,46 @@ def get_vout(vout, txid, conn):
             """, 
             (txid, vout_n, vout_value, vout_scriptPubKey_desc, vout_scriptPubKey_address, vout_scriptPubKey_type)
         )
+        conn.commit()
         
 def process_transactions(block, conn):
     for tx in block['tx']:
         txid = tx["txid"]
-        miner_time = block.get('time')
+        # There is no cost feasible way to see when a Bitcoin transaction was created with certainty; these may be used as estimates though.
         median_blocktime = block.get("mediantime")
-        
-        
-        conn.execute(
-            """
-            INSERT INTO transactions (txid, median_blocktime, miner_time)
-            VALUES (?, ?, ?)
-            """, 
-            (txid, median_blocktime, miner_time)
-        )
+        miner_time = block.get("time")
+        try:
+            conn.execute(
+                """
+                INSERT INTO transactions (txid, median_blocktime, miner_time)
+                VALUES (?, ?, ?)
+                """, 
+                (txid, median_blocktime, miner_time)
+            )
+            conn.commit()
+        except Exception as e:
+            # If that transaction is already parsed it wont be added to the database twice, no need to do anything.
+            if "UNIQUE constraint failed" not in str(e):
+                print(e)
+                raise
+            else:
+                print(e)
         
         # Process inputs and outputs
-        get_vin(tx.get("vin", []), txid, conn)
-        get_vout(tx.get("vout", []), txid, conn)
+        try:
+            get_vout(tx.get("vout", []), txid, conn)
+            get_vin(tx.get("vin", []), txid, conn)
+        except Exception as e:
+            if "UNIQUE constraint failed" not in str(e):
+                print(e)
+                raise
+            else:
+                print(e)
+
 
 def createBlockchainTxnDatabase(start_height, chunk_size=chunksize):
     conn = sqlite3.connect(database_path)
-    conn.execute("PRAGMA foreign_keys = ON;")  # Ensure FK constraints in SQLite
+    conn.execute("PRAGMA foreign_keys = ON;")  
     
     end_height = rpc_request("getblockcount")['result']
     
@@ -113,10 +136,9 @@ def createBlockchainTxnDatabase(start_height, chunk_size=chunksize):
             
             if height % progress_n == 0:
                 print(f"Processed block height: {height}")
+            # Sleep to avoid overloading API
             sleep(0.1)  
-        
-        conn.commit()  
-    
+            
     conn.close()
     
 def main():
