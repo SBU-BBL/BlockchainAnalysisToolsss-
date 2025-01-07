@@ -42,3 +42,8 @@ CREATE TABLE normalized_hashes (
     root_hash TEXT NOT NULL,
 );
 
+CREATE TABLE cs_clusters (
+	root_hash TEXT NOT NULL,
+	cluster TEXT NOT NULL,
+	FOREIGN KEY (root_hash) REFERENCES normalized_hashes (root_hash)
+);
