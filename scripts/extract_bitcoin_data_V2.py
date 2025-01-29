@@ -90,10 +90,11 @@ def process_transactions(block, conn):
         # There is no cost feasible way to see when a Bitcoin transaction was created with certainty; these may be used as estimates though.
         median_blocktime = block.get("mediantime")
         miner_time = block.get("time")
+        locktime = block.get("locktime")
         try:
             conn.execute(
                 """
-                INSERT INTO transactions (txid, median_blocktime, miner_time)
+                INSERT INTO transactions (txid, median_blocktime, miner_time, locktime)
                 VALUES (?, ?, ?)
                 """, 
                 (txid, median_blocktime, miner_time)
