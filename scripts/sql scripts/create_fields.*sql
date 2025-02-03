@@ -1,7 +1,8 @@
 CREATE TABLE transactions (
     txid TEXT PRIMARY KEY,
     median_blocktime TIMESTAMP NULL,
-    miner_time TIMESTAMP NULL
+    miner_time TIMESTAMP NULL,
+    locktime TEXT NULL
 );
 
 CREATE TABLE outputs (
