@@ -41,10 +41,15 @@ CREATE TABLE inputs (
 CREATE TABLE normalized_hashes (
     hash TEXT NOT NULL,
     root_hash TEXT NOT NULL,
-    FOREIGN KEY (hash) REFERENCES normalized_hashes (vout_scriptPubKey_address)
 );
 
 CREATE TABLE cs_clusters (
+	root_hash TEXT NOT NULL,
+	cluster TEXT NOT NULL,
+	FOREIGN KEY (root_hash) REFERENCES normalized_hashes (root_hash)
+);
+
+CREATE TABLE temporal_clusters (
 	root_hash TEXT NOT NULL,
 	cluster TEXT NOT NULL,
 	FOREIGN KEY (root_hash) REFERENCES normalized_hashes (root_hash)
