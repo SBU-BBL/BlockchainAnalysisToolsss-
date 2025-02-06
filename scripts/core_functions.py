@@ -67,19 +67,7 @@ def deriveUndefinedAddresses(pubkey, assume_multisig_owned = True, n_childkeys =
     address_list.append(addresses)
     
   return address_list
-####################################################################################################
-# This function gets the txid of an input, finds the output with a matching txid, and gets the identifying column, which can be implicitly linked to an address. TODO: Decide if getting addresses later.
-# The function then returns a dataframe of the txid and the output addresses associated with it. This can easily be merged by the txid column to the original transaction dataset.
-# Chunk size is the number of sequential blocks to search. If unspecified, it will search all blocks.
-# TODO: Make it subset just the parts it needs with chunk_size
-def matchInputOutput(txns, chunk_size, vin_txid_colname = 'vin_txid', vout_index_colname = 'vin_vout', txid_colname = 'txid', n_colname = 'vout_n'):
-  txns['From_Identifier'] = pd.NA
-  for i in range(len(txns)):
-    row = txns.iloc[i]
-    matched_rows = txns[txns[txid_colname] == row[vin_txid_colname]]
-    matched_output = matched_rows[matched_rows[n_colname] == row['vout_index_colname']]
-    txns.iloc[i]['From_Identifier'] = matched_output['Identifier'].iloc[0] # Problem: This input could be made from many outputs. How do i do this correctly?
-  return txns
+
 ####################################################################################################
 # Grabs the push data in between all the OP_ calls in the asm field, stores the results in a list
 # This is intended to be used for parsing public keys from pubkey and multisig transcations.
@@ -95,47 +83,6 @@ def parsePushData(script_asm, individuals_in_list = True):
     if len(push_data) == 1:
       push_data = push_data[0] # Unlist single public key
   return push_data
-####################################################################################################
-# Inputs a lists of lists with partially duplicated items and returns the largest list of unique values associated with each of those partial duplicates.
-def unionFind(lists):
-        parent = {}
-        rank = {}
-        
-        def find(x):
-            if parent[x] != x:
-                parent[x] = find(parent[x])  # Call recursively for speed! :P
-            return parent[x]
-
-        def union(x, y):
-            rootX = find(x)
-            rootY = find(y)
-            if rootX != rootY:
-                if rank[rootX] > rank[rootY]:
-                    parent[rootY] = rootX
-                elif rank[rootX] < rank[rootY]:
-                    parent[rootX] = rootY
-                else:
-                    parent[rootY] = rootX
-                    rank[rootX] += 1
-
-        all_items = set(item for lst in lists for item in lst)
-        for item in all_items:
-            parent[item] = item
-            rank[item] = 0
-
-        for lst in lists:
-            for i in range(len(lst) - 1):
-                union(lst[i], lst[i + 1])
-
-        #Assign items to the same group by root, this is the complete set of merged lists.
-        groups = {}
-        for item in all_items:
-            root = find(item)
-            if root not in groups:
-                groups[root] = []
-            groups[root].append(item)
-
-        return list(groups.values())
 ####################################################################################################
 import re
 
