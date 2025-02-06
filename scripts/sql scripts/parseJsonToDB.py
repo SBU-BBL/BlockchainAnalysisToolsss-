@@ -1,8 +1,11 @@
-
+## DEPRECIATED ##
 import ijson
 import sqlite3
 # This function imports bitcoin JSONs into the tables of the supported database schema. 
 def parse_json_to_db(file_path, db_path):
+    '''
+    DEPRECIATED. For compatability with extract_bitcoin_data_V1 and V2 onwards.
+    '''
     with sqlite3.connect(db_path, timeout=30) as conn:
         cursor = conn.cursor()
 
