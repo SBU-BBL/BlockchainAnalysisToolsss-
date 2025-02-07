@@ -1,8 +1,6 @@
-# -*- coding: utf-8 -*-
-# -*- coding: utf-8 -*-
 
 ### Written by Dr. Keli Xiao
-### Updated by Noah Tover
+### V2 & V3 by Noah Tover
 ### DEPENDENCIES: Indexing is set to true in conf file. SQLite. Database Schema as of 12/9/2024
 # Function specific dependencies in descriptions
 ### DESCRIPTION: Parses data into database schema. I didn't document much as the process is intuitive, simply a matter of reading in JSONs to relational database and calling the RPC when necessary.
