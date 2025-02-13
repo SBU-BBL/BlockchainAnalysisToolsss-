@@ -40,7 +40,7 @@ CREATE TABLE inputs (
 
 CREATE TABLE normalized_hashes (
     hash TEXT NOT NULL,
-    root_hash TEXT NOT NULL,
+    root_hash TEXT NOT NULL
 );
 
 CREATE TABLE cs_clusters (
