@@ -4,20 +4,22 @@ The following is a library of functions useful for blockchain analysis with pyth
 The psuedonymity of the Bitcoin blockchain may provide insight into the behaviors of successful traders. Although several methods exist to further anonymize one's transactions, many also exist to do the opposite. Techniques from blockchain forensics and analysis can potentially be used to develop signals and/or filters from a wallet cluster's trading activities. This project is an application of these techniques, with the end goal of identifying some edge hidden within the network. If Bitcoin trader's alpha can be reverse engineered from this public data, it suggests that there is significant alpha decay risk in the bitcoin markets. This would mean that Bitcoin trading necessiates anonymization - an additional fixed cost. This could potentially impact a Bitcoin strategies position on the risk curve.
 ### Dependencies ###
 - psycopg2
-- pandas
+- pandas as pd
 - re
 - hashlib
 - multiprocessing
 - threading
+- time, sleep from time
+- requests
 ### Using the Library ###
 1.) Download the blockchain with a Bitcoin Core full node and populate a postgreSQL database with that data using extract_bitcoin_data_beta.py. Please follow the steps in the extract_bitcoin_data_beta README to do so. 
 Run it in the command prompt with:
 ```
-py extract_bitcoin_data_V3.py
+py extract_bitcoin_data_beta.py
 ```
 Or
 ```
-python extract_bitcoin_data_V3.py
+python extract_bitcoin_beta.py
 ```
 You will be prompted for a starting height. This is the height the code will begin parsing transactions from, note it down so you can stop it and restart it later if needed.
 Note: This step will take a while. To avoid corrupting your Bitcoin node, only use the “bitcoin-cli stop” command in the command prompt at the daemon file path and allow full shutdown before closing. You can use task manager for this purpose as well.
@@ -42,7 +44,4 @@ Heuristic Cluster:
 An educated guess as to which wallets belong to a specific entity. For example, common spend clustering assumes all input wallets in any transaction belong to the same owner, as they must control all the private keys to transact with these wallets simultaneously. 
 Transaction:
 The locking and unlocking of an unspent transaction output (UTXO) via a script. Most commonly, hashes of the private key are used. 
-### Incoming Updates
-1.) Eigenvalue centrality and exchange cluster identification.
-2.) Subsetting market predictive wallets NOT clustered who interact with exchanges (likely non anonymizing traders).
 
