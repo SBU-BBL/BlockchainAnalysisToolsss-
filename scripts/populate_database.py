@@ -7,6 +7,7 @@ import re
 import pandas as pd
 from time import sleep
 from math import ceil
+import tkinter as tk
 
 # Temporary CSV storage
 DB_CONFIG = {
@@ -53,6 +54,24 @@ def backup_data(drive_x, drive_y, file_x, file_y):
     pauser.resume()
 
 
+
+def launch_gui_pauser():
+    pauser = pauserfunc()
+    root = tk.Tk()
+    root.title("Pause Controller")
+
+    def do_pause():
+        pauser.pause()
+        print("Paused via GUI")
+
+    def do_resume():
+        pauser.resume()
+        print("Resumed via GUI")
+
+    tk.Button(root, text="Pause", command=do_pause).pack(padx=20, pady=10)
+    tk.Button(root, text="Resume", command=do_resume).pack(padx=20, pady=10)
+
+    root.mainloop()
 
 
 
@@ -425,6 +444,7 @@ def main():
         fillNormalizedHashes()
     
 if __name__ == "__main__":
+    threading.Thread(target=launch_gui_pauser, daemon=True).start() #Launch pause GUI button.
     main()
 
 
