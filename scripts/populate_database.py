@@ -1,15 +1,13 @@
+##############################################
 import os
 import psycopg2
-import threading
-from hashlib import sha256
 import bitcoinlib
 import re
-import pandas as pd
 from time import sleep
-from math import ceil
-import tkinter as tk
-
-# Temporary CSV storage
+from multiprocessing import Pool
+from psycopg2.extras import execute_values
+############################################
+# Configure settings
 DB_CONFIG = {
     "dbname": "postgres",
     "user": "NTOVER",
@@ -18,172 +16,14 @@ DB_CONFIG = {
     "port": "5432"
 }
 
-# Directory containing CSV files
 CSV_DIR = r"D:\csv_dir"
 delete_copied = True
 signal_path = os.path.join(CSV_DIR, "done.signal") # This file is produced by extract_bitcoin_data when it finishes downloading csvs.
-
-
-
-def backup_data(drive_x, drive_y, file_x, file_y):
-    """
-    This function backs data up to google drive. If data_dir is a database, it will pause any of the functions in this library that write to the database.
-    Honestly this is the sloppiest and nastiest function i have written in my entire life. Developing without permissions is hard :))))))
-    Dependencies:
-        Google drive is open in browser at 500, 500
-    Arguments:
-        drive_x, drive_y, coordinates of the google drive browser open.
-        file_x, file_y, coordinates of the file to backup.
-    """
-    import pyautogui
-    import time
-    pauser = pauserfunc()
-    pauser.pause()
-    pauser.wait_for_all_to_pause()
-
-    
-    # Drag and drop the file
-    pyautogui.moveTo(file_x, file_y)
-    pyautogui.mouseDown()  # Click and hold
-    pyautogui.moveTo(drive_x, drive_y, duration=1)  
-    pyautogui.mouseUp()  # Release the file
-    
-    print("File uploaded successfully! Now waiting 15 hours. Ugly software causes ugly fixes sorry lol")
-    time.sleep(8 * 60 * 60)
-    print("File upload likely complete! Unpausing..")
-    pauser.resume()
-
-
-
-def launch_gui_pauser():
-    pauser = pauserfunc()
-    root = tk.Tk()
-    root.title("Pause Controller")
-
-    def do_pause():
-        pauser.pause()
-        print("Paused via GUI")
-
-    def do_resume():
-        pauser.resume()
-        print("Resumed via GUI")
-
-    tk.Button(root, text="Pause", command=do_pause).pack(padx=20, pady=10)
-    tk.Button(root, text="Resume", command=do_resume).pack(padx=20, pady=10)
-
-    root.mainloop()
-
-
-
-class pauserfunc:
-    """
-    Pauses any of this library's function's chunked SQL writes.
-    Directions:
-        Specify a pauser = pauserfunc() inside each function that will use this. At each point where its okay to pause, put a pauser.wait_to_resume.
-    Methods:
-        .pause -> Pauses 
-        .resume -> Resumes
-        .wait_to_resume -> Checkpoints for where a function will wait while paused.
-        .wait_for_all_to_pause -> Waiting area while a function that needs all paused waits for them to finish their transaction.
-    """
-    _instance = None  
-
-    def __new__(cls):
-        if cls._instance is None:
-            cls._instance = super(pauserfunc, cls).__new__(cls)
-            cls._instance.pause_event = threading.Event()
-            cls._instance.pause_event.set()  
-            cls._instance.lock = threading.Lock()  # To safely update active counter
-            cls._instance.condition = threading.Condition(cls._instance.lock)  # Notify when all are paused
-            cls._instance.active_count = 0  # Number of active functions
-        return cls._instance
-    
-    def pause(self):
-        with self.lock:
-            self.pause_event.clear()  
-
-    def resume(self):
-        with self.lock:
-            self.pause_event.set()  
-            self.condition.notify_all() 
-    
-    def wait_to_resume(self):
-        with self.lock:
-            self.active_count += 1 
-            self.condition.notify_all()  
-        
-        self.pause_event.wait()  
-        
-        with self.lock:
-            self.active_count -= 1  
-            self.condition.notify_all()  
-
-    def wait_for_all_to_pause(self):
-        with self.lock:
-            while self.active_count > 0:  
-                self.condition.wait()
-                
-def copy_csvs_to_postgre(all_csvs_downloaded = False):
-    """
-    Process all CSV files in the specified folder to their respective table in the postgre database. Supports continuously growing folders.
-    PARAMETERS:
-        - all_csvs_downloaded = True if the csv list is already comprehensive and not being continuously updated by extract_bitcoin_data script.
-    DEPENDENCIES:
-        - csvs must be named like tablename...csv
-        - csvs must have a matching format to the table names of the postgresql database.
-    
-    """
-    conn = psycopg2.connect(**DB_CONFIG)
-    cursor = conn.cursor()
-    pauser = pauserfunc()
-    cursor.execute("SET maintenance_work_mem = '1.9GB';")
-    conn.commit()
-    errors = [] # Track any errors that occur.
-
-    try:
-        # This while loop just rechecks the folder to see if any new files have been added after all of the initially found are processed.
-        while True:
-            folder_contents = os.listdir(CSV_DIR) 
-
-            if not folder_contents and (os.path.exists(signal_path) or all_csvs_downloaded): 
-                print("All csvs populated into database.")
-                break 
-            elif not folder_contents:
-                sleep(600) # Wait for csvs to get downloaded..
-                
-            
-            for filename in folder_contents:
-                
-                if filename.endswith(".csv"):
-                    filepath = os.path.join(CSV_DIR, filename)
-                    table_name = filename.split(sep = "_")[0] # Assuming format like tablename_....csv
-                    
-                    try:
-                        with conn.cursor() as cursor:
-                            with open(filepath, 'r') as f:
-                                cursor.copy_expert(f"COPY {table_name} FROM STDIN WITH CSV HEADER", f)
-                            conn.commit()
-                            print(f"Successfully loaded {filepath} into {table_name}")
-                    
-                        if delete_copied == True:
-                            # Delete CSV after successful upload (storage issue)
-                            os.remove(filepath)  
-                            print(f"Deleted {filepath}")
-                            
-                            pauser.wait_to_resume() # Pause checkpoint.
-                    except Exception as e:
-                        print(f"Error processing {filename}: {e}")
-                        errors.append(e)
-                        conn.rollback() # This resets the failed transaction state and allows other files to be downloaded to the database.
-                        continue
-
-
-
-    finally:
-        conn.close()
-        print("All CSVs copied into database!")
-        return errors
-        
+chunk_size_psqlwork = 65000
+chunk_size_pythonwork = 25000
+ncores = 8
+############################################
+# Dependencies..
 def deriveUndefinedAddresses(pubkey, assume_multisig_owned = True, n_childkeys = 2):
   '''
   Creates a dictionary of derived addresses and compressed and uncompressed version(s) of the pubkey(s). This is a base truth hash tree.
@@ -248,22 +88,9 @@ def deriveUndefinedAddresses(pubkey, assume_multisig_owned = True, n_childkeys =
     
   return address_list
 
-
-chunk_size = 3000  # Adjust as needed
-
-#######################################
 def connect_db():
     """Establish a PostgreSQL connection. Hopefully this function makes it easier to switch libraries, if needed."""
     return psycopg2.connect(**DB_CONFIG)
-
-def parsePushData(script_asm, individuals_in_list=True):
-    if not isinstance(script_asm, str):
-        script_asm = str(script_asm)
-    substrings = script_asm.split()
-    push_data = [substring for substring in substrings if not substring.startswith('OP')]
-    if not individuals_in_list and len(push_data) == 1:
-        push_data = push_data[0]
-    return push_data
 
 def parseDesc(descriptor: str):
     descriptor = descriptor.replace(" ", "").split("#", 1)[0] if "#" in descriptor else descriptor
@@ -280,171 +107,220 @@ def parseDesc(descriptor: str):
     matches = key_pattern.findall(descriptor)
     return [key for (_, key) in matches]
 
-def fillOutputHashes(chunk_size=5000, delete_desc = False):
-    """Fills or replaces the address field with public keys from descriptors or revealed public keys in the inputs."""
-    conn = connect_db()
-    cursor = conn.cursor()
-    
-    print("Indexing columns for fast lookups")
-    index_queries = [
-    # Primary keys
-    "ALTER TABLE transactions ADD PRIMARY KEY (txid);",
-    "ALTER TABLE outputs ADD PRIMARY KEY (txid, vout_n);",
-    "CREATE INDEX IF NOT EXISTS idx_inputs_vin ON inputs(vin_txid, vin_vout);",
-    "CREATE INDEX IF NOT EXISTS idx_outputs_type ON outputs(vout_scriptPubKey_type);",
-    "CREATE INDEX IF NOT EXISTS idx_outputs_address ON outputs(vout_scriptPubKey_address);",
-    "ALTER TABLE outputs ADD CONSTRAINT fk_outputs_txid FOREIGN KEY (txid) REFERENCES transactions (txid);",
-    "ALTER TABLE inputs ADD CONSTRAINT fk_inputs_outputs FOREIGN KEY (vin_txid, vin_vout) REFERENCES outputs (txid, vout_n);"
-    ]
-
-    for query in index_queries:
-        try:
-            cursor.execute(query)
-            print(f"Executed: {query}")
-        except Exception as e:
-            print(f"Error with query: {query}\n{e}")
-    
+def tuneDB_for_python_processing(cursor, conn):
+    '''
+    Gives the postgresql server less memory and cpu to prioritize in python processing.
+    '''
+    cursor.execute("SET max_parallel_workers = 4;") 
+    cursor.execute("SET max_parallel_workers_per_gather = 2;")
+    cursor.execute("SET maintenance_work_mem = '500MB';")
+    cursor.execute("SET work_mem = '128MB'; ")
     conn.commit()
-        
+def tuneDB_for_psql_processing(cursor, conn):
+    cursor.execute("SET max_parallel_workers = 8;") 
+    cursor.execute("SET max_parallel_workers_per_gather = 4;")
+    cursor.execute("SET maintenance_work_mem = '1GB';")
+    cursor.execute("SET work_mem = '256MB'; ")
+    conn.commit()
 
-    print('Beginning hash parsing...')
-    
-    revealedpk_query = """
-    WITH revealedkeys AS (
-        SELECT 
-            i.vin_txid AS referenced_txid,
-            i.vin_vout AS referenced_vout_n,
-            CASE 
-                WHEN position(' ' IN i.vin_asm) > 0 
-                THEN substring(i.vin_asm FROM position(' ' IN i.vin_asm) + 1)
-                ELSE NULL
-            END AS extracted_address
-        FROM inputs i
-        JOIN outputs o ON i.vin_txid = o.txid AND i.vin_vout = o.vout_n
-        WHERE o.vout_scriptPubKey_type = 'pubkeyhash'
-        LIMIT %s
-    )
-    UPDATE outputs
-    SET vout_scriptPubKey_address = revealedkeys.extracted_address,
-        vout_scriptPubKey_type = 'pubkey'
-    FROM revealedkeys
-    WHERE outputs.txid = revealedkeys.referenced_txid
-    AND outputs.vout_n = revealedkeys.referenced_vout_n;
-    """
-    
-    while True:  
-        cursor.execute(revealedpk_query, (chunk_size,))
-        conn.commit()
-        
-        if cursor.rowcount == 0:
-            print("Addresses replaced with revealed classic public keys")
-            break
 
-    witness_query = """
-    SELECT i.vin_txid, i.vin_vout, i.witness_data
-    FROM inputs i
-    JOIN outputs o ON i.vin_txid = o.txid AND i.vin_vout = o.vout_n
-    WHERE o.vout_scriptPubKey_type = 'witness_v0_keyhash'
-    AND i.witness_data IS NOT NULL
-    LIMIT %s;
-    """
-    
-    while True:
-        cursor.execute(witness_query, (chunk_size,))
-        rows = cursor.fetchall()
-        if not rows:
-            break
+# -*- coding: utf-8 -*-
+def copy_csvs_to_postgre():
+    print("skipping :P")
 
-        updates = [(witness.split(", ")[-1], txid, vout_n) for txid, vout_n, witness in rows]
-        update_query = """
-        UPDATE outputs
-        SET vout_scriptPubKey_address = %s, vout_scriptPubKey_type = 'pubkey'
-        WHERE txid = %s AND vout_n = %s;
-        """
-        cursor.executemany(update_query, updates)
-        conn.commit()
-    # Delete the descriptor column to save space.
-    if delete_desc == True:
-        cursor.execute("""
-                       ALTER TABLE outputs DROP COLUMN vout_scriptPubKey_desc;
-                       """)
-    conn.close()
+def findRevealedPkeys(chunk_size, commit_every = 10):
+    '''
 
-# Honestly I dont remember why I am not just using COPY instead of bulk inserts. Probably because COPY is all or nothing.
-def append_table(df, table_name, conn):
-    """Batch-inserts a dataframe into PostgreSQL."""
-    if df.empty:
-        return
-    
-    cursor = conn.cursor()
-    columns = list(df.columns)
-    placeholders = ", ".join(["%s"] * len(columns))
-    cols_str = ", ".join(columns)
-    sql = f"INSERT INTO {table_name} ({cols_str}) VALUES ({placeholders}) ON CONFLICT DO NOTHING"
+    Parameters
+    --
+    commit_every : The number of chunks finished before commiting. Done for efficiency.
+        DESCRIPTION. The default is 10.
 
-    data = [tuple(row) for row in df.itertuples(index=False, name=None)]
-
-    try:
-        cursor.executemany(sql, data)
-        conn.commit()
-    except Exception as e:
-        print(f"Batch insert failed: {e}")
-        raise
-        conn.commit()
-
-def fillNormalizedHashes(chunk_size=5000):
-    """Normalizes hashes and stores them in the normalized_hashes table."""
+    Description: This function parses the asm field or the witness data field for revealed public keys, then replaced the referenced outputs address and type with the public key and "pubkey", respectively.
+    DEPENDENCY: Witness data is a comma separated string like "data1, data2, datan, pkey"
+    --
+    '''
     conn = connect_db()
     cursor = conn.cursor()
-
-    def normalizeHashes(unique_pubkeys):
-        """Derives all conventional address types from each public key."""
-        newly_defined_addresses = [
-            deriveUndefinedAddresses(pubkey, assume_multisig_owned=True)
-            for pubkey in unique_pubkeys
-        ]
-        hash_dictionary = {}    
-        for each in newly_defined_addresses:
-            unique_id = sha256(str(tuple(each)).encode()).hexdigest()
-            for hash_type in each:
-                if hash_type not in hash_dictionary:
-                    hash_dictionary[hash_type] = unique_id    
-        return hash_dictionary
-
-    offset = 0
-    print('Beginning normalization...')
-    while True:
-        query = f"""
-            SELECT DISTINCT vout_scriptPubKey_address
-            FROM outputs
-            WHERE vout_scriptPubKey_type = 'pubkey'
-            LIMIT {chunk_size} OFFSET {offset};
+    sql = sql = """
+        WITH next_batch AS (
+            SELECT  i.vin_txid AS txid,
+                    i.vin_vout AS vout_n,
+                    CASE
+                        WHEN i.witness_data IS NOT NULL THEN
+                             trim(                      
+                                  reverse(              
+                                      split_part(      
+                                          reverse(i.witness_data), 
+                                          ',',         
+                                          1            
+                                      )
+                                  )
+                             )
+                        ELSE
+                             trim(
+                                  reverse(
+                                      split_part(
+                                          reverse(i.vin_asm),
+                                          ' ',          
+                                          1
+                                      )
+                                  )
+                             )
+                    END AS revealed_key
+            FROM   inputs  i
+            JOIN   outputs o
+                   ON  o.txid   = i.vin_txid
+                   AND o.vout_n = i.vin_vout
+                   AND o.descriptor_type = 'pubkeyhash'
+            WHERE  (i.witness_data IS NOT NULL OR i.vin_asm IS NOT NULL)
+            LIMIT  %s            
+        )
+        UPDATE outputs o
+        SET    address         = nb.revealed_key,
+               descriptor_type = 'pubkey'
+        FROM   next_batch nb
+        WHERE  o.txid   = nb.txid
+        AND    o.vout_n = nb.vout_n;
         """
-        cursor.execute(query)
+    counter = 0
+    while True:
+        cursor.execute(sql, (chunk_size,))
+        counter += 1
+        if cursor.rowcount == 0:
+            conn.commit()
+            cursor.close()
+            conn.close()
+            print("All addresses with revealed public keys coerced to public keys.")
+            break  # no more to update
+        if counter % commit_every == 0:
+            conn.commit()
+        
+def parsePubkeyDescriptors(chunk_size, commit_every = 10):
+    '''
+    Gets chunks of pubkey descriptors with null addresses and parses the public key into that address field. Parallel friendly.
+    '''
+    conn   = connect_db()         # one connection per worker
+    cursor    = conn.cursor()
+    counter  = 0                    # for commit batching
+    while True:
+        # 1) Grab the next slice of work, locking rows so no other worker sees them
+        cursor.execute(
+            """
+            WITH cte AS (
+                SELECT txid, vout_n, descriptor
+                FROM   outputs
+                WHERE  descriptor_type = 'pubkey'
+                  AND (address IS NULL OR address = '')
+                FOR UPDATE SKIP LOCKED
+                LIMIT  %s
+            )
+            SELECT txid, vout_n, descriptor FROM cte;
+            """,
+            (chunk_size,)
+        )
         rows = cursor.fetchall()
-
         if not rows:
-            print(f'Around {offset} rows processed')
-            break
+            print("A worker finihed parsing pubkey descriptors into addresses. ")
+            break   # Finished
 
-        normalized_data = normalizeHashes(unique_pubkeys=[row[0] for row in rows])
-        normalized_df = pd.DataFrame(list(normalized_data.items()), columns=['hash', 'root_hash'])
-        append_table(df=normalized_df, table_name="normalized_hashes", conn=conn)
+        updates = []
+        for txid, vout_n, descriptor in rows:
+            try:
+                pubkey = parseDesc(descriptor)[0]   # parseDesc returns a list for multisig support, as of now this only parses pubkeys though so only getting pubkey.
+                updates.append((pubkey, txid, vout_n))
+            except Exception as e:
+                print(f"[worker {os.getpid()}] parse error for {txid}:{vout_n} – {e}")
 
-        offset += chunk_size
+        # 3) Bulk‑update the slice
+        if updates:
+            cursor.executemany(
+                """
+                UPDATE outputs
+                   SET address = %s
+                 WHERE txid   = %s
+                   AND vout_n = %s;
+                """,
+                updates,
+            )
 
+        counter += 1
+        if counter % commit_every == 0:
+            conn.commit()     # amortise fsync/WAL cost
+
+    conn.commit()             # final flush
+    cursor.close()
     conn.close()
 
-
-def main():
-    print("Starting...")
-    any_download_errors = copy_csvs_to_postgre() # This naming is slightly unclear, but copy_csvs_to_postgre returns a list of errors if any happened so the following two functions do not execute.
-    if not any_download_errors:
-        fillOutputHashes()
-        fillNormalizedHashes()
+def fillNormalizedHashes(chunk_size, commit_every = 10):
     
+    """
+    This function fills in the normalized hashes table by mapping the lowest level hash to any hashes which can be derived from it. Parallel friendly.
+    DEPENDENCY: deriveUndefinedAddresses()
+    """
+    conn = connect_db()
+    conn.autocommit = False
+    cursor = conn.cursor()
+    counter = 0
+    # Order for standardized chunks.
+    sql = """
+        SELECT address
+        FROM   outputs
+        WHERE  descriptor_type = 'pubkey'
+          AND  NOT EXISTS (
+                  SELECT 1
+                  FROM   normalized_hashes nh
+                  WHERE  nh.hash = outputs.address )
+        ORDER  BY address
+        FOR UPDATE SKIP LOCKED
+        LIMIT  %s;
+        """         
+    while True:
+        with conn.cursor() as cursor:
+            cursor.execute(sql, (chunk_size, ))
+            rows = cursor.fetchall()
+            if not rows:
+                conn.commit()
+                cursor.close()
+                conn.close()
+                print("Normalization completed for a worker")
+                return
+            hash_rows = []
+            for (pubkey,) in rows:
+                try:
+                    addrs = deriveUndefinedAddresses(
+                        pubkey, assume_multisig_owned=True
+                    )
+                    root = addrs[0] # The root hash will just be a hash of all the other hashes. In the future this should probably just be a pubkey though for clarity.
+                    
+                    hash_rows.extend((h, root) for h in addrs[1:])
+                    hash_rows.append((root, root)) # This is just to keep downstream dependencies working - the root hash used to be a composite hash but this made no sense.
+
+                except Exception as e:
+                    print(f"[{os.getpid()}] Error on {pubkey}: {e}")
+                    
+            execute_values(
+                cursor,
+                """
+                INSERT INTO normalized_hashes (hash, root_hash)
+                VALUES %s
+                ON CONFLICT DO NOTHING;
+                """,
+                hash_rows,
+            )
+            counter += 1
+            if counter % commit_every == 0:
+                print("Batch commited")
+                conn.commit()                 # release locks in batches
+
 if __name__ == "__main__":
-    threading.Thread(target=launch_gui_pauser, daemon=True).start() #Launch pause GUI button.
-    main()
-
-
+    copy_csvs_to_postgre()
+    print("Starting to find revealed public keys...")
+    findRevealedPkeys(chunk_size = chunk_size_psqlwork, commit_every = 10)
+    tuneDB_for_python_processing()
+    with Pool(ncores) as pool:
+        print("Starting to parse descriptors...")
+        pool.map(parsePubkeyDescriptors, [chunk_size_pythonwork] * ncores)
+        print("Starting to normalize hashes...")
+        pool.map(fillNormalizedHashes, [chunk_size_pythonwork] * ncores)
+    print("Database population and normalization complete! :D")
