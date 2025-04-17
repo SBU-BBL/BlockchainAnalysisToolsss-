@@ -9,9 +9,9 @@ CREATE TABLE outputs (
     txid TEXT NOT NULL,
     vout_n REAL NOT NULL,
     vout_value REAL,
-    vout_scriptPubKey_desc text NULL,
-    vout_scriptPubKey_address text NULL,
-    vout_scriptPubKey_type text,
+    descriptor text NULL,
+    address text NULL,
+    descriptor_type text,
     vout_wallet_ID text NULL,
     PRIMARY KEY (txid, vout_n),
     FOREIGN KEY (txid) REFERENCES transactions (txid)
@@ -20,9 +20,12 @@ CREATE TABLE outputs (
 CREATE TABLE output_hashes (
     txid TEXT NOT NULL,
     vout_n REAL NOT NULL,
-    vout_scriptPubKey_address TEXT NULL,
-    vout_scriptPubKey_type TEXT NULL
+    address TEXT NULL,
+    descriptor_type TEXT NULL
 );
+
+CREATE INDEX idx_outputs_type ON outputs(descriptor_type); -- Pubkey type transactions are regularly subset
+CREATE INDEX idx_outputs_address ON outputs(address); -- Addresses are usually referenced as well.
 
 -- (vin_txid, vin_vout) will be indexed after processing. (vin_txid, vin_vout) contains nulls because of coinbase transactions - but non nulls reference outputs (txid, vout_n)
 CREATE TABLE inputs (
@@ -32,7 +35,10 @@ CREATE TABLE inputs (
     vin_asm TEXT NULL,
     witness_data TEXT NULL
 );
--- Please keep in mind that the hash may or may not exist in the vout_scriptPubKey_address column as it is derived. Thus, a foreign key isnt used (this is a bandaid)
+
+CREATE INDEX idx_inputs_vin ON inputs(vin_txid, vin_vout); -- In the future, this should be a primary key for non coinbase transactions. Full normalization should create a separate table linked to inputs by a foreign key of input_type.
+
+-- Please keep in mind that the hash may or may not exist in the address column as it is derived. Thus, a foreign key isnt used (this is a bandaid)
 CREATE TABLE normalized_hashes (
     hash TEXT NOT NULL,
     root_hash TEXT NOT NULL,
