@@ -128,75 +128,9 @@ def tuneDB_for_psql_processing(cursor, conn):
 def copy_csvs_to_postgre():
     print("skipping :P")
 
-def findRevealedPkeys(chunk_size, commit_every = 10):
-    '''
 
-    Parameters
-    --
-    commit_every : The number of chunks finished before commiting. Done for efficiency.
-        DESCRIPTION. The default is 10.
-
-    Description: This function parses the asm field or the witness data field for revealed public keys, then replaced the referenced outputs address and type with the public key and "pubkey", respectively.
-    DEPENDENCY: Witness data is a comma separated string like "data1, data2, datan, pkey"
-    --
-    '''
-    conn = connect_db()
-    cursor = conn.cursor()
-    sql = sql = """
-        WITH next_batch AS (
-            SELECT  i.vin_txid AS txid,
-                    i.vin_vout AS vout_n,
-                    CASE
-                        WHEN i.witness_data IS NOT NULL THEN
-                             trim(                      
-                                  reverse(              
-                                      split_part(      
-                                          reverse(i.witness_data), 
-                                          ',',         
-                                          1            
-                                      )
-                                  )
-                             )
-                        ELSE
-                             trim(
-                                  reverse(
-                                      split_part(
-                                          reverse(i.vin_asm),
-                                          ' ',          
-                                          1
-                                      )
-                                  )
-                             )
-                    END AS revealed_key
-            FROM   inputs  i
-            JOIN   outputs o
-                   ON  o.txid   = i.vin_txid
-                   AND o.vout_n = i.vin_vout
-                   AND o.descriptor_type = 'pubkeyhash'
-            WHERE  (i.witness_data IS NOT NULL OR i.vin_asm IS NOT NULL)
-            LIMIT  %s            
-        )
-        UPDATE outputs o
-        SET    address         = nb.revealed_key,
-               descriptor_type = 'pubkey'
-        FROM   next_batch nb
-        WHERE  o.txid   = nb.txid
-        AND    o.vout_n = nb.vout_n;
-        """
-    counter = 0
-    while True:
-        cursor.execute(sql, (chunk_size,))
-        counter += 1
-        if cursor.rowcount == 0:
-            conn.commit()
-            cursor.close()
-            conn.close()
-            print("All addresses with revealed public keys coerced to public keys.")
-            break  # no more to update
-        if counter % commit_every == 0:
-            conn.commit()
         
-def parsePubkeyDescriptors(chunk_size, commit_every = 10):
+def parsePubkeyDescriptors(chunk_size, commit_every = 1):
     '''
     Gets chunks of pubkey descriptors with null addresses and parses the public key into that address field. Parallel friendly.
     '''
@@ -246,12 +180,103 @@ def parsePubkeyDescriptors(chunk_size, commit_every = 10):
 
         counter += 1
         if counter % commit_every == 0:
-            conn.commit()     # amortise fsync/WAL cost
+            conn.commit()     
+            print("Parsed descriptor chunk commit to database")
 
     conn.commit()             # final flush
     cursor.close()
     conn.close()
+def findRevealedPkeys():
+    conn = connect_db()
+    with conn.cursor() as cursor:
+        print("Starting to look for revealed public keys...")
+        cursor.execute("SET work_mem = '500MB';")
+        cursor.execute("SET temp_buffers = '11GB';")
+        cursor.execute("SET parallel_setup_cost = 0;")        
+        cursor.execute("SET parallel_tuple_cost = 0;")
+        
+        cursor.execute("""
+        SELECT EXISTS (
+            SELECT 1
+            FROM pg_proc
+            WHERE proname = 'get_revealed_key'
+              AND pg_catalog.pg_function_is_visible(oid)
+        );
+    """)
+    function_exists = cursor.fetchone()[0]
+    
+    if not function_exists:
+        cursor.execute("""
+            CREATE OR REPLACE FUNCTION public.get_revealed_key(witness_data text, vin_asm text)
+            RETURNS text
+            LANGUAGE plpgsql
+            IMMUTABLE PARALLEL SAFE
+            AS $function$
+            BEGIN
+              IF witness_data IS NOT NULL THEN
+                RETURN trim(
+                         reverse(
+                           split_part(
+                             reverse(witness_data),
+                             ',',
+                             1
+                           )
+                         )
+                       );
+              ELSE
+                RETURN trim(
+                         reverse(
+                           split_part(
+                             reverse(vin_asm),
+                             ' ',
+                             1
+                           )
+                         )
+                       );
+              END IF;
+            END;
+            $function$;
+        """)
+        conn.commit()
+        print("Function created.")
 
+        cursor.execute("""
+                       
+        BEGIN;
+        
+        
+        
+        CREATE TEMP TABLE revealed_keys ON COMMIT DROP AS
+        SELECT
+          i.vin_txid   AS txid,
+          i.vin_vout   AS vout_n,
+          get_revealed_key(i.witness_data, i.vin_asm) AS revealed_key
+        FROM inputs i
+        JOIN outputs o
+          ON o.txid = i.vin_txid
+         AND o.vout_n = i.vin_vout
+        WHERE o.descriptor_type = 'pubkeyhash'
+          AND (i.witness_data IS NOT NULL OR i.vin_asm IS NOT NULL);
+        
+        CREATE INDEX ON revealed_keys (txid, vout_n);
+        ANALYZE revealed_keys;
+        
+        -- 2.4: Single UPDATE
+        UPDATE outputs o
+        SET
+          address         = r.revealed_key,
+          descriptor_type = 'pubkey'
+        FROM revealed_keys r
+        WHERE o.txid   = r.txid
+          AND o.vout_n = r.vout_n;
+        
+        COMMIT;
+
+                       """)
+        print("Found and replaced all revealed public keys.")
+        cursor.execute("VACUUM ANALYZE;")
+    conn.commit()
+    
 def fillNormalizedHashes(chunk_size, commit_every = 10):
     
     """
@@ -313,14 +338,127 @@ def fillNormalizedHashes(chunk_size, commit_every = 10):
                 print("Batch commited")
                 conn.commit()                 # release locks in batches
 
+def trimDB():
+    '''
+    This makes the database smaller after populate_database is ran in full by reducing redundant information. 
+    DEPENDENCY: Multisigs and all other types besides pubkey ignored as root_hash candidates.
+    '''
+    conn = connect_db()
+    cursor = conn.cursor()
+    try:
+        # Set descriptor and descriptor_type to NULL in outputs where descriptor_type = 'pubkey'
+        cursor.execute("""
+            UPDATE outputs
+            SET descriptor = NULL
+            WHERE descriptor_type = 'pubkey';
+        """)
+        
+        # Redundant because descriptors can be parsed for 
+        cursor.execute("""
+                       ALTER TABLE transactions
+                       DROP COLUMN descriptor_type;
+                       """)
+
+        # Set witness_data and vin_asm to NULL in inputs where the referenced output has descriptor_type = 'pubkey'
+        cursor.execute("""
+            UPDATE inputs
+            SET witness_data = NULL,
+                vin_asm = NULL
+            WHERE (vin_txid, vin_vout) IN (
+                SELECT txid, vout_n
+                FROM outputs
+                WHERE descriptor_type IS NULL  -- Because we just nulled 'pubkey'
+            );
+        """)
+
+        cursor.execute("VACUUM FULL ANALYZE;")
+
+        conn.commit()
+        print("Database trimmed successfully.")
+
+    except Exception as e:
+        conn.rollback()
+        print(f"Error occurred: {e}")
+    finally:
+        cursor.close()
+        conn.close()
+
+def commonSpendCluster():
+    conn = connect_db()
+    cursor = conn.cursor()
+    cursor.execute("SET temp_buffers = '10GB';") 
+    cursor.execute("SET parallel_setup_cost = 0;")        
+    cursor.execute("SET parallel_tuple_cost = 0;")
+    sql = """
+    
+    DROP TABLE IF EXISTS tmp_input_nodes;
+    CREATE UNLOGGED TABLE tmp_input_nodes AS
+    SELECT DISTINCT
+           i.vin_txid AS spent_txid,
+           COALESCE(nh.root_hash, o.address, i.vin_txid || ':' || i.vin_vout) AS node_hash
+    FROM inputs i
+    JOIN outputs o ON o.txid = i.vin_txid AND o.vout_n = i.vin_vout
+    LEFT JOIN normalized_hashes nh ON nh.hash = o.address
+    WHERE i.vin_txid IS NOT NULL;
+    
+    CREATE INDEX ON tmp_input_nodes(node_hash);
+    ANALYZE tmp_input_nodes;
+    
+    INSERT INTO normalized_hashes(hash, root_hash)
+    SELECT ni.node_hash, ni.node_hash
+    FROM tmp_input_nodes ni
+    LEFT JOIN normalized_hashes nh ON nh.hash = ni.node_hash AND nh.root_hash = ni.node_hash
+    WHERE nh.hash IS NULL
+    ON CONFLICT DO NOTHING;
+    
+    DROP TABLE IF EXISTS tmp_spend_edges;
+    CREATE UNLOGGED TABLE tmp_spend_edges AS
+    SELECT DISTINCT
+           LEAST(a.node_hash, b.node_hash) AS h1,
+           GREATEST(a.node_hash, b.node_hash) AS h2
+    FROM tmp_input_nodes a
+    JOIN tmp_input_nodes b ON a.spent_txid = b.spent_txid AND a.node_hash <> b.node_hash;
+    
+    CREATE INDEX ON tmp_spend_edges(h1);
+    CREATE INDEX ON tmp_spend_edges(h2);
+    ANALYZE tmp_spend_edges;
+    
+    WITH RECURSIVE
+        cc(node, comp) AS (
+            SELECT node_hash, node_hash FROM (SELECT DISTINCT node_hash FROM tmp_input_nodes) n
+            UNION ALL
+            SELECT e.h1, LEAST(cc.comp, e.h2) FROM cc JOIN tmp_spend_edges e ON cc.node = e.h1 WHERE LEAST(cc.comp, e.h2) < cc.comp
+            UNION ALL
+            SELECT e.h2, LEAST(cc.comp, e.h1) FROM cc JOIN tmp_spend_edges e ON cc.node = e.h2 WHERE LEAST(cc.comp, e.h1) < cc.comp
+        ),
+        final_comp AS (
+            SELECT node AS root_hash, MIN(comp) AS cluster
+            FROM cc
+            GROUP BY node
+        )
+    INSERT INTO cs_clusters(root_hash, cluster)
+    SELECT root_hash, cluster
+    FROM final_comp
+    ON CONFLICT (root_hash, cluster) DO NOTHING;
+    
+    DROP TABLE IF EXISTS tmp_spend_edges;
+    DROP TABLE IF EXISTS tmp_input_nodes;
+
+    """
+    print("Starting common spend graph discovery")
+    cursor.execute(sql)
+    print("Finished common spend graphy discovery!")
+    
+
 if __name__ == "__main__":
     copy_csvs_to_postgre()
-    print("Starting to find revealed public keys...")
-    findRevealedPkeys(chunk_size = chunk_size_psqlwork, commit_every = 10)
-    tuneDB_for_python_processing()
+    findRevealedPkeys()
     with Pool(ncores) as pool:
         print("Starting to parse descriptors...")
         pool.map(parsePubkeyDescriptors, [chunk_size_pythonwork] * ncores)
-        print("Starting to normalize hashes...")
         pool.map(fillNormalizedHashes, [chunk_size_pythonwork] * ncores)
+    trimDB()
+    commonSpendCluster()
+        
     print("Database population and normalization complete! :D")
+    
