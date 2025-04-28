@@ -48,8 +48,9 @@ def deriveUndefinedAddresses(pubkey, assume_multisig_owned = True, n_childkeys =
       compressed_key = bitcoinlib.keys.Key(import_key = key.public_compressed_hex)
       # To do: Add more address support.
     legacy_address = uncompressed_key.address(encoding = 'base58', script_type = 'p2pkh')
+    compressed_legacy_address = compressed_key.address(encoding = 'base58', script_type = 'p2pkh')
     segwit_address = compressed_key.address(encoding = 'bech32', script_type = 'p2wpkh')
-    defined_addresses = [key.public_uncompressed_hex, key.public_compressed_hex, legacy_address, segwit_address]
+    defined_addresses = [key.public_uncompressed_hex, key.public_compressed_hex, legacy_address, compressed_legacy_address, segwit_address]
     return defined_addresses
   def derive_from_extended(xpub):
       xpub_defined_addresses = []
