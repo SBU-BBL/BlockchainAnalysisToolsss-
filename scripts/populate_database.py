@@ -67,23 +67,20 @@ def deriveUndefinedAddresses(pubkey, assume_multisig_owned = True, n_childkeys =
   if isinstance(pubkey, list):
     for each_key in pubkey:
         if is_extended_pubkey(each_key):
-            # For an xpub, derive multiple child keys
+            # For an xpub derive specified amount of child keys (there r infinite)
             xpub_addresses = derive_from_extended(each_key)
             address_list.append(xpub_addresses)
         else:
-            # Normal key, just derive addresses
             ithkey_addresses = deriveIndividualAddresses(each_key)
             address_list.append(ithkey_addresses)
-    if assume_multisig_owned:
-        # Flattens the list of lists.
-        flattened = []
-        for item in address_list:
-            if isinstance(item, list):
-                for sub in item:
-                    flattened.extend(sub)
-            else:
-                flattened.extend(item)
-        address_list = flattened
+        if assume_multisig_owned:
+            flattened = []
+            for item in address_list:
+                if isinstance(item, list):
+                    flattened.extend(item)
+                else:
+                    flattened.append(item)
+            address_list = flattened
   else:
     address_list = deriveIndividualAddresses(pubkey)
     
