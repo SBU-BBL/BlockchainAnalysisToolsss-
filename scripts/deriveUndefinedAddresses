@@ -1,3 +1,4 @@
+# TODO: In the future, this function should be able to input and derive the addresses of descriptors as well. This would allow for the codebase to be significantly simpler.
 import hashlib
 import coincurve
 # SOURCE: https://developer.bitcoin.org/devguide/transactions.html
