@@ -1,0 +1,165 @@
+import hashlib
+import coincurve
+# SOURCE: https://developer.bitcoin.org/devguide/transactions.html
+# 2.7x faster than bitcoinlib.
+# Constants used for Bech32 encoding (fixed by BIP-173). 
+_CHARSET = 'qpzry9x8gf2tvdw0s3jn54khce6mua7l'
+_HRP = 'bc'
+_HRP_EXPAND = [ord(x) >> 5 for x in _HRP] + [0] + [ord(x) & 31 for x in _HRP]
+_GEN = (0x3b6a57b2, 0x26508e6d, 0x1ea119fa, 0x3d4233dd, 0x2a1462b3)
+_B58_ALPHABET = b'123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz'
+
+# Hashlib cached constructors for speed boost and non redundantness
+_sha256 = hashlib.sha256
+_ripemd160 = lambda: hashlib.new('ripemd160')
+
+
+def _hash160(b: bytes) -> bytes:
+    """Perform Bitcoin HASH160 (RIPEMD160 of SHA256 of input)."""
+    h = _sha256()
+    h.update(b)
+    s = h.digest()
+    r = _ripemd160()
+    r.update(s)
+    return r.digest()
+
+def _base58checkEncode(data: bytes) -> str:
+    """Encode data with Base58Check (double SHA256 + Base58)."""
+    checksum = _sha256(_sha256(data).digest()).digest()[:4]
+    data += checksum
+    n = int.from_bytes(data, 'big')
+    res = bytearray()
+    while n > 0:
+        n, r = divmod(n, 58)
+        res.append(_B58_ALPHABET[r])
+    res.reverse()
+    # Preserve leading 0x00 bytes as '1'
+    pad = 0
+    for byte in data:
+        if byte == 0:
+            pad += 1
+        else:
+            break
+    return (b'1' * pad + res).decode()
+
+def _bech32Polymod(values):
+    """Calculate Bech32 checksum polymod."""
+    chk = 1
+    for v in values:
+        b = chk >> 25
+        chk = (chk & 0x1ffffff) << 5 ^ v
+        for i in range(5):
+            if (b >> i) & 1:
+                chk ^= _GEN[i]
+    return chk
+
+def _bech32CreateChecksum(data):
+    """Create a checksum for Bech32 encoding."""
+    values = _HRP_EXPAND + data
+    polymod = _bech32Polymod(values + [0, 0, 0, 0, 0, 0]) ^ 1
+    return [(polymod >> 5 * (5 - i)) & 31 for i in range(6)]
+
+def _bech32Encode(data):
+    """Encode payload bytes into Bech32 address string."""
+    combined = data + _bech32CreateChecksum(data)
+    return _HRP + '1' + ''.join(_CHARSET[d] for d in combined)
+
+def _convertBits(data, fromBits, toBits):
+    """Convert bit groups (e.g., 8-bit bytes to 5-bit groups for Bech32)."""
+    acc = 0
+    bits = 0
+    ret = []
+    maxv = (1 << toBits) - 1
+    for v in data:
+        acc = (acc << fromBits) | v
+        bits += fromBits
+        while bits >= toBits:
+            bits -= toBits
+            ret.append((acc >> bits) & maxv)
+    if bits:
+        ret.append((acc << (tobits - bits)) & maxv)
+    return ret
+
+
+
+def compressPubkey(pubkeyBytes: bytes) -> bytes:
+    """Compress an uncompressed public key (0x04 + x + y format)."""
+    v = memoryview(pubkeyBytes)
+    return (b'\x02' if (v[64] & 1) == 0 else b'\x03') + v[1:33].tobytes()
+
+def decompressPubkey(pubkeyBytes: bytes) -> bytes:
+    """Decompress a compressed public key using secp256k1."""
+    return coincurve.PublicKey(pubkeyBytes).format(compressed=False)
+
+def p2pkhAddress(pubkeyBytes: bytes) -> str:
+    """Create a P2PKH (legacy Base58) address from a public key."""
+    return _base58checkEncode(b'\x00' + _hash160(pubkeyBytes))
+
+def p2wpkhAddress(pubkeyBytes: bytes) -> str:
+    """Create a P2WPKH (SegWit Bech32) address from a public key."""
+    h160 = _hash160(pubkeyBytes)
+    data = _convertBits(h160, 8, 5)
+    return _bech32Encode([0] + data)
+
+def deriveUndefinedAddresses_fast(pubkey, assumeMultisigOwned=True, nChildKeys=2):
+    """
+    Derives Bitcoin addresses from a public key or list of public keys (in the multisig case). 
+    Why use this func instead of bitcoin core's?
+    Bitcoin core's doesn't derive ALL types of addresses - only traditional pubkeyhash ones! 
+    This function allows you to get child keys, both compressed and uncompressed p2pkh addresses and 
+    segwit addresses. This is neccessary for matching addresses to a root!
+
+    Arguments:
+        pubkey (str or List[str]): 
+            A single public key hex string, or a list of public key hex strings (for multisig wallets).
+            Multisig pubkeys **must** be passed as a list for correct handling.
+        assumeMultisigOwned (bool):
+            If True, derived addresses from multiple pubkeys are flattened together (assuming common ownership).
+            If False, addresses from each pubkey are kept in separate sublists.
+        nChildKeys (int):
+            Number of child keys to derive if given an xpub. (Not implemented yet.)
+
+    Returns:
+        List[str] or List[List[str]]:
+            A list of derived values for each public key:
+            - uncompressed public key hex
+            - compressed public key hex
+            - legacy P2PKH address (uncompressed)
+            - legacy P2PKH address (compressed)
+            - SegWit Bech32 address (compressed)
+            
+            For multisig, may return nested lists depending on assumeMultisigOwned.
+            This is for ease of identifying which derived addresses correspond to which multisig.
+            ## TODO: In the future make it so multisigs can be passed as non lists w/ argument
+    
+    """
+
+    def _derive(pubkeyHex: str):
+        pubkeyBytes = bytes.fromhex(pubkeyHex)
+        if pubkeyBytes[0] == 0x04:
+            uncompressed = pubkeyBytes
+            compressed = compressPubkey(pubkeyBytes)
+        else:
+            compressed = pubkeyBytes
+            uncompressed = decompressPubkey(pubkeyBytes)
+
+        return [
+            uncompressed.hex(),
+            compressed.hex(),
+            p2pkhAddress(uncompressed),
+            p2pkhAddress(compressed),
+            p2wpkhAddress(compressed)
+        ]
+
+    def _isXpub(k: str) -> bool:
+        return k[:4] in ('xpub', 'tpub', 'ypub', 'zpub', 'vpub')
+
+    if isinstance(pubkey, list):
+        outputs = [_derive(k) if not _isXpub(k) else None for k in pubkey]
+        if any(v is None for v in outputs):
+            raise NotImplementedError("xpub derivation not implemented.")
+        return sum(outputs, []) if assumeMultisigOwned else outputs
+    else:
+        if _isXpub(pubkey):
+            raise NotImplementedError("xpub derivation not implemented.")
+        return _derive(pubkey)
