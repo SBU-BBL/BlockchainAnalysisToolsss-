@@ -16,13 +16,6 @@ CREATE TABLE outputs (
     PRIMARY KEY (txid, vout_n),
     FOREIGN KEY (txid) REFERENCES transactions (txid)
 );
--- We are ignoring multisigs for now. Ignore this table.
-CREATE TABLE output_hashes (
-    txid TEXT NOT NULL,
-    vout_n REAL NOT NULL,
-    address TEXT NULL,
-    descriptor_type TEXT NULL
-);
 
 CREATE INDEX idx_outputs_type ON outputs(descriptor_type); -- Pubkey type transactions are regularly subset
 CREATE INDEX idx_outputs_address ON outputs(address); -- Addresses are usually referenced as well.
