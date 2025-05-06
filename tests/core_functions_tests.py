@@ -76,7 +76,8 @@ class TestDeriveUndefinedAddresses(unittest.TestCase):
     def test_multisig_pubkey_assume_owned_true(self):
         multisig_keys = [
             "022afc20bf379bc96a2f4e9e63ffceb8652b2b6a097f63fbee6ecec2a49a48010e",
-            "03a767c7221e9f15f870f1ad9311f5ab937d79fcaeee15bb2c722bca515581b4c0"
+            "03a767c7221e9f15f870f1ad9311f5ab937d79fcaeee15bb2c722bca515581b4c0",
+            "xpub69H7F5d8KSRgmmdJg2KhpAK8SR3DjMwAdkxj3ZuxV27CprR9LgpeyGmXUbC6wb7ERfvrnKZjXoUmmDznezpbZb7ap6r1D3tgFxHmwMkQTPH"
         ]
         expected = [
             '042afc20bf379bc96a2f4e9e63ffceb8652b2b6a097f63fbee6ecec2a49a48010e2cb891c04968f2b98e4d803100c01206b2974eae23873aac5bb6769964fec510',
@@ -88,15 +89,26 @@ class TestDeriveUndefinedAddresses(unittest.TestCase):
             '03a767c7221e9f15f870f1ad9311f5ab937d79fcaeee15bb2c722bca515581b4c0',
             '1JziWdpY7H8y5hDmCCCoY9Go1WE49SrLyB',
             '12ppVrt7pVMQnVpekHmrcEZ5vUnUcFfV6w',
-            'bc1qzsp4xvdgf2xeh277vcu306824t9n3e2k8e43jm'
+            'bc1qzsp4xvdgf2xeh277vcu306824t9n3e2k8e43jm',
+            '0405c8897fd0ff5644adba4545a84020cd6aa94d90e1e0a56bb4b8eb7522e3ef8c3ce6a1770325699f0672016985db4a592dcc8e2827928a480838514b8d50fc7a',
+            '0205c8897fd0ff5644adba4545a84020cd6aa94d90e1e0a56bb4b8eb7522e3ef8c',
+            '1NnmyYHgKp5ujYmYignfvQb3LGCcziut1R',
+            '1NyMg76BQxDvV6vRsQugNS4ED2hpZCJtwK',
+            'bc1q7ypnz7ulpd6c5ckt8pujs8fruwcaawgdgg7luh',
+            '04d27a781fd1b3ec5ba5017ca55b9b900fde598459a0204597b37e6c66a0e35c98e26c8e66a34ff746ef40cbf918bca2086f38f5a46b0c5f1fcac7a4136fb36f30',
+            '02d27a781fd1b3ec5ba5017ca55b9b900fde598459a0204597b37e6c66a0e35c98',
+            '1PiLa2knQKjJdaj4546xUczhSsgVcm3zJA',
+            '1NK8BtPi1AkfCwa4uuCb8fEtyYUg4NFC93',
+            'bc1qa8yzpa070ejy9t8qgql39murz5vchd8zdwynde'
         ]
-        result = deriveUndefinedAddresses(multisig_keys, assume_multisig_owned=True)
+        result = deriveUndefinedAddresses(multisig_keys, assume_multisig_owned=True, nChildKeys = 2)
         self.assertEqual(result, expected)
 
     def test_multisig_pubkey_assume_owned_false(self):
         multisig_keys = [
             "022afc20bf379bc96a2f4e9e63ffceb8652b2b6a097f63fbee6ecec2a49a48010e",
-            "03a767c7221e9f15f870f1ad9311f5ab937d79fcaeee15bb2c722bca515581b4c0"
+            "03a767c7221e9f15f870f1ad9311f5ab937d79fcaeee15bb2c722bca515581b4c0",
+            "xpub69H7F5d8KSRgmmdJg2KhpAK8SR3DjMwAdkxj3ZuxV27CprR9LgpeyGmXUbC6wb7ERfvrnKZjXoUmmDznezpbZb7ap6r1D3tgFxHmwMkQTPH"
         ]
         expected = [
             [
@@ -112,7 +124,18 @@ class TestDeriveUndefinedAddresses(unittest.TestCase):
                 '1JziWdpY7H8y5hDmCCCoY9Go1WE49SrLyB',
                 '12ppVrt7pVMQnVpekHmrcEZ5vUnUcFfV6w',
                 'bc1qzsp4xvdgf2xeh277vcu306824t9n3e2k8e43jm'
+            ],
+            [    '0405c8897fd0ff5644adba4545a84020cd6aa94d90e1e0a56bb4b8eb7522e3ef8c3ce6a1770325699f0672016985db4a592dcc8e2827928a480838514b8d50fc7a',
+                 '0205c8897fd0ff5644adba4545a84020cd6aa94d90e1e0a56bb4b8eb7522e3ef8c',
+                 '1NnmyYHgKp5ujYmYignfvQb3LGCcziut1R',
+                 '1NyMg76BQxDvV6vRsQugNS4ED2hpZCJtwK',
+                 'bc1q7ypnz7ulpd6c5ckt8pujs8fruwcaawgdgg7luh',
+                 '04d27a781fd1b3ec5ba5017ca55b9b900fde598459a0204597b37e6c66a0e35c98e26c8e66a34ff746ef40cbf918bca2086f38f5a46b0c5f1fcac7a4136fb36f30',
+                 '02d27a781fd1b3ec5ba5017ca55b9b900fde598459a0204597b37e6c66a0e35c98',
+                 '1PiLa2knQKjJdaj4546xUczhSsgVcm3zJA',
+                 '1NK8BtPi1AkfCwa4uuCb8fEtyYUg4NFC93',
+                 'bc1qa8yzpa070ejy9t8qgql39murz5vchd8zdwynde'
             ]
         ]
-        result = deriveUndefinedAddresses(multisig_keys, assume_multisig_owned=False)
+        result = deriveUndefinedAddresses(multisig_keys, assume_multisig_owned=False nChildKeys = 2)
         self.assertEqual(result, expected)
