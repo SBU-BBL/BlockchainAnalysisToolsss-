@@ -19,6 +19,7 @@ CREATE TABLE outputs (
 
 CREATE INDEX idx_outputs_type ON outputs(descriptor_type); -- Pubkey type transactions are regularly subset
 CREATE INDEX idx_outputs_address ON outputs(address); -- Addresses are usually referenced as well.
+CREATE INDEX idx_outputs_descriptor_multisig ON outputs (descriptor) WHERE descriptor_type = 'multisig'; --Helps speed up multisig parsing.
 
 -- (vin_txid, vin_vout) will be indexed after processing. (vin_txid, vin_vout) contains nulls because of coinbase transactions - but non nulls reference outputs (txid, vout_n)
 CREATE TABLE inputs (
