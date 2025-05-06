@@ -1,6 +1,8 @@
 # TODO: In the future, this function should be able to input and derive the addresses of descriptors as well. This would allow for the codebase to be significantly simpler.
 import hashlib
 import coincurve
+from base58 import b58decode_check
+from bip32utils import BIP32Key
 # SOURCE: https://developer.bitcoin.org/devguide/transactions.html
 # 2.7x faster than bitcoinlib.
 # Constants used for Bech32 encoding (fixed by BIP-173). 
@@ -102,38 +104,24 @@ def p2wpkhAddress(pubkeyBytes: bytes) -> str:
     data = _convertBits(h160, 8, 5)
     return _bech32Encode([0] + data)
 
-def deriveUndefinedAddresses_fast(pubkey, assumeMultisigOwned=True, nChildKeys=2):
-    """
-    Derives Bitcoin addresses from a public key or list of public keys (in the multisig case). 
-    Why use this func instead of bitcoin core's?
-    Bitcoin core's doesn't derive ALL types of addresses - only traditional pubkeyhash ones! 
-    This function allows you to get child keys, both compressed and uncompressed p2pkh addresses and 
-    segwit addresses. This is neccessary for matching addresses to a root!
+def deriveUndefinedAddresses(pubkey, assumeMultisigOwned=True, nChildKeys=2):
+    def _isXpub(k: str):
+        return k[:4] in ('xpub', 'tpub', 'ypub', 'zpub', 'vpub')
 
-    Arguments:
-        pubkey (str or List[str]): 
-            A single public key hex string, or a list of public key hex strings (for multisig wallets).
-            Multisig pubkeys **must** be passed as a list for correct handling.
-        assumeMultisigOwned (bool):
-            If True, derived addresses from multiple pubkeys are flattened together (assuming common ownership).
-            If False, addresses from each pubkey are kept in separate sublists.
-        nChildKeys (int):
-            Number of child keys to derive if given an xpub. (Not implemented yet.)
-
-    Returns:
-        List[str] or List[List[str]]:
-            A list of derived values for each public key:
-            - uncompressed public key hex
-            - compressed public key hex
-            - legacy P2PKH address (uncompressed)
-            - legacy P2PKH address (compressed)
-            - SegWit Bech32 address (compressed)
-            
-            For multisig, may return nested lists depending on assumeMultisigOwned.
-            This is for ease of identifying which derived addresses correspond to which multisig.
-            ## TODO: In the future make it so multisigs can be passed as non lists w/ argument
-    
-    """
+    def _deriveFromXpub(xpub: str, n: int):
+        bip32 = BIP32.from_xpub(xpub)
+        results = []
+        for i in range(n):
+            pubkey = bip32.get_pubkey_from_path(f"m/{i}")
+            uncompressed = decompressPubkey(pubkey)
+            results.extend([
+                uncompressed.hex(),
+                pubkey.hex(),
+                p2pkhAddress(uncompressed),
+                p2pkhAddress(pubkey),
+                p2wpkhAddress(pubkey),
+            ])
+        return results
 
     def _derive(pubkeyHex: str):
         pubkeyBytes = bytes.fromhex(pubkeyHex)
@@ -152,15 +140,15 @@ def deriveUndefinedAddresses_fast(pubkey, assumeMultisigOwned=True, nChildKeys=2
             p2wpkhAddress(compressed)
         ]
 
-    def _isXpub(k: str) -> bool:
-        return k[:4] in ('xpub', 'tpub', 'ypub', 'zpub', 'vpub')
-
     if isinstance(pubkey, list):
-        outputs = [_derive(k) if not _isXpub(k) else None for k in pubkey]
-        if any(v is None for v in outputs):
-            raise NotImplementedError("xpub derivation not implemented.")
-        return sum(outputs, []) if assumeMultisigOwned else outputs
+        tree = []
+        for k in pubkey:
+            if _isXpub(k):
+                tree.append(_deriveFromXpub(k, nChildKeys))
+            else:
+                tree.append(_derive(k))
+        return sum(tree, []) if assumeMultisigOwned else tree
+    elif _isXpub(pubkey):
+        return _deriveFromXpub(k, nChildKeys)
     else:
-        if _isXpub(pubkey):
-            raise NotImplementedError("xpub derivation not implemented.")
         return _derive(pubkey)
