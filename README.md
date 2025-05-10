@@ -1,18 +1,26 @@
 ### Smart-Wallet-Tracking ###
-The following is a library of functions useful for blockchain analysis with python 🐍 and SQL. This library has tools for hash normalization, heuristic clustering, developing cluster balances, and many more to come. I plan on posting my research results in the "notebooks" file to give a feel for how this library can be used for blockchain analysis. 
-
-The psuedonymity of the Bitcoin blockchain may provide insight into the behaviors of successful traders. Although several methods exist to further anonymize one's transactions, many also exist to do the opposite. Techniques from blockchain forensics and analysis can potentially be used to develop signals and/or filters from a wallet cluster's trading activities. This project is an application of these techniques, with the end goal of identifying some edge hidden within the network. If Bitcoin trader's alpha can be reverse engineered from this public data, it suggests that there is significant alpha decay risk in the bitcoin markets. This would mean that Bitcoin trading necessiates anonymization - an additional fixed cost. This could potentially impact a Bitcoin strategies position on the risk curve.
+The goal of this software is to make surface level blockchain analysis accessible in terms of hardware requirements and ease of validation. It builds a bare bones database containing condensed transaction level information about script clusters (entities) on the blockchain. It normalizes standard scripts as equivalent to the lowest level script capable of deriving them and allows for the assumption of shared multisig ownership. Its hyperfocus, although limiting, allows for transaction information to be condensed to increase speed and allow for accessibility - a common spend clustering graph of all blockchain transacitons up to block 800,000 is only 17 GB. Parallel support and cluster computing is convenient as easily maintainable through ray integration. Traditional libraries are optimized for people who have computational resources, are highly generalizable (extra work to tailor), and often fail to normalize standard scripts.  
 ### Dependencies ###
 - psycopg2
-- pandas as pd
+- ray
 - re
 - hashlib
-- multiprocessing
-- threading
-- time, sleep from time
-- requests
+- base58
+- coincurve
+- time
+- os
+- Bitcoin Core v29
+- PostgreSQL v17
+### Assumptions ###
+- The last object in vin_asms and witness data is the revealed public key for single key scripts. This is valid as of 5/10/2025 in Bitcoin core.
+## Future Needs ##
+- Deanonymization for taproot scripts. Using revealed taproot public keys, along with common scripts, to generate script path spend addresses for normalization.
+- Dynamic memory tuning for memory constrained systems
+- More seamless user interface
+- Support for pruned node rather than full would expand to users with less storage.
+- Further common spend clustering for legacy multisig can be achieved by identifying which keys produced the signatures in the redeem script, mapping them to the same script id, and isolating the others.
 ### Using the Library ###
-1.) Download the blockchain with a Bitcoin Core full node and populate a postgreSQL database with that data using extract_bitcoin_data_beta.py. Please follow the steps in the extract_bitcoin_data_beta README to do so. 
+1.) Download the blockchain with a Bitcoin Core full node and populate a postgreSQL database with that data using extract_bitcoin_data_beta.py. Please follow the steps in the extract_bitcoin_data_beta README to do so. This portion requires ~700GB of storage for a full node, but that can be red
 Run it in the command prompt with:
 ```
 py extract_bitcoin_data_beta.py
@@ -23,12 +31,12 @@ python extract_bitcoin_beta.py
 ```
 You will be prompted for a starting height. This is the height the code will begin parsing transactions from, note it down so you can stop it and restart it later if needed.
 Note: This step will take a while. To avoid corrupting your Bitcoin node, only use the “bitcoin-cli stop” command in the command prompt at the daemon file path and allow full shutdown before closing. You can use task manager for this purpose as well.
-2.) Transform the data into an easy to analyze format using: 
+2.) Enter the details of your postgresql server, then run the following script. This will take ~2 days to run on non performant systems - but faster drive speeds (such as NVME SSDs/RAID arrays with good partitioning) will lower that significantly. Change the memory settings as necessary to fit your system, they are by default set for a system with 20 GB of ram free.: 
 ```
-fillParsedHashTables.py
+populate_database.py
 ```
-This function essentially finds the highest level hash, if one is available, and maps it to all of its descendant nodes. This is important because a hash can produce many sub hashes. For example, a single public key can produce a traditional address, segwit address, etc.. Furthermore, this function normalizes the database for multisig addresses through the multi_output_hashes table. 
-4.) Create initial clusters. Common spend clustering is the process of finding weakly connected components in input transactions. The latter is faster as neo4j is specifically built for graph applications.
+This script parses and subsequently builds a table of normalized hashes. Finally, it trims the now redundant parts of the database if desired. Normalizing hashes is important because a hash can produce many sub hashes. For example, a single public key can produce a traditional address, segwit address, etc.. Furthermore, this function normalizes the database for multisig addresses through the multi_output_hashes table. Options for assuming shared multisig ownership or non shared are available. 
+4.) Create an edge set for common spend clustering, and load into memory to find the weakly connected components. 
 ```
 commonSpendCluster(db_path = "YOUR_PATH_HERE")
 ```
