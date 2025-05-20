@@ -1,47 +1,35 @@
 CREATE TABLE transactions (
-    txid TEXT PRIMARY KEY,
-    median_blocktime BIGINT NULL,
+    txid INT PRIMARY KEY, -- Integer representation allows for fast indexing.
+    txid_verbose BYTEA NULL, --Raw bytes of txid is stored here. 
     miner_time BIGINT NULL, -- Postgre doesn't allow unix in timestamps. This is for ease of import.
-    locktime TEXT NULL
+    locktime INT NULL
 );
 
 CREATE TABLE outputs (
-    txid TEXT NOT NULL,
-    vout_n REAL NOT NULL,
+    txid INT NOT NULL,
+    vout_n INT NOT NULL,
     vout_value REAL,
-    descriptor text NULL,
-    address text NULL,
-    descriptor_type text,
-    vout_wallet_ID text NULL,
-    PRIMARY KEY (txid, vout_n),
-    FOREIGN KEY (txid) REFERENCES transactions (txid)
+    descriptor TEXT NULL,
+    address TEXT NULL,
+    descriptor_type BOOLEAN NULL, -- 1 if needs parsing, 2 if needs reveal, NULL if neither. This results in significant size compression + speedup.
+    wallet_id INT NULL,
+    PRIMARY KEY (txid, vout_n)
 );
 
-CREATE INDEX idx_outputs_type ON outputs(descriptor_type); -- Pubkey type transactions are regularly subset
-CREATE INDEX idx_outputs_address ON outputs(address); -- Addresses are usually referenced as well.
-CREATE INDEX idx_outputs_descriptor_multisig ON outputs (descriptor) WHERE descriptor_type = 'multisig'; --Helps speed up multisig parsing.
-
--- (vin_txid, vin_vout) will be indexed after processing. (vin_txid, vin_vout) contains nulls because of coinbase transactions - but non nulls reference outputs (txid, vout_n)
 CREATE TABLE inputs (
-    txid TEXT NULL,
-    vin_txid TEXT NULL,
+    txid BYTEA NOT NULL, --Temporarily raw bytes prior to joining on transactions to get the txid integer. 
+    vin_txid BYTEA NULL,
     vin_vout REAL NULL,
-    vin_asm TEXT NULL,
-    witness_data TEXT NULL
+    asm_redeem TEXT NULL, --Only contains the last item to save significant space. This is all thats needed for revealed public keys. 
+    witness_redeem TEXT NULL -- Same as above.
 );
 
-CREATE INDEX idx_inputs_vin ON inputs(vin_txid, vin_vout); -- In the future, this should be a primary key for non coinbase transactions. Full normalization should create a separate table linked to inputs by a foreign key of input_type.
-
--- Please keep in mind that the hash may or may not exist in the address column as it is derived. Thus, a foreign key isnt used (this is a bandaid)
 CREATE TABLE normalized_hashes (
     hash TEXT NOT NULL,
-    root_hash TEXT NOT NULL,
-    PRIMARY KEY (hash, root_hash)
+    wallet_id INT NOT NULL,
 );
 
 CREATE TABLE cs_clusters (
-    root_hash TEXT NULL,
-    cluster TEXT NULL,
-    PRIMARY KEY (root_hash, cluster)
-    FOREIGN KEY (root_hash) REFERENCES normalized_hashes (root_hash)
+    wallet_id INT NOT NULL,
+    cluster_id INT NOT NULL,    
 );
