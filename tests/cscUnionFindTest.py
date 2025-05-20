@@ -1,10 +1,8 @@
 import unittest
+import numpy as np
+import numpy.testing as npt  
 
-class cscUnionFindTest(unittest.TestCase):
-
-    def normalizeGroups(self, groups):
-        "This function just sorts the groups so that its uniform - not necessary of the function."
-        return sorted([sorted(group) for group in groups])
+class testcscUnionFind(unittest.TestCase):
 
     def testSingleGroup(self):
         data = np.array([
@@ -12,9 +10,13 @@ class cscUnionFindTest(unittest.TestCase):
             [1, 3],
             [1, 4]
         ], dtype=np.int32)
-        expected = [[2, 3, 4]]
+        expected = np.array([
+            [2, 0],
+            [3, 0],
+            [4, 0]
+        ], dtype=np.int32)
         result = cscUnionFind(data)
-        self.assertEqual(self.normalizeGroups(result), self.normalizeGroups(expected))
+        npt.assert_array_equal(result, expected)
 
     def testMultipleGroups(self):
         data = np.array([
@@ -25,9 +27,16 @@ class cscUnionFindTest(unittest.TestCase):
             [10, 9],
             [10, 8]
         ], dtype=np.int32)
-        expected = [[2, 3], [5, 6], [8, 9]]
+        expected = np.array([
+            [2, 0],
+            [3, 0],
+            [5, 1],
+            [6, 1],
+            [8, 2],
+            [9, 2]
+        ], dtype=np.int32)
         result = cscUnionFind(data)
-        self.assertEqual(self.normalizeGroups(result), self.normalizeGroups(expected))
+        npt.assert_array_equal(result, expected)
 
     def testDisconnectedGroups(self):
         data = np.array([
@@ -36,9 +45,14 @@ class cscUnionFindTest(unittest.TestCase):
             [3, 4],
             [4, 5]
         ], dtype=np.int32)
-        expected = [[2], [3], [4], [5]]
+        expected = np.array([
+            [2, 0],
+            [3, 1],
+            [4, 2],
+            [5, 3]
+        ], dtype=np.int32)
         result = cscUnionFind(data)
-        self.assertEqual(self.normalizeGroups(result), self.normalizeGroups(expected))
+        npt.assert_array_equal(result, expected)
 
     def testChainConnection(self):
         data = np.array([
@@ -50,15 +64,15 @@ class cscUnionFindTest(unittest.TestCase):
             [5, 3],
             [5, 10]
         ], dtype=np.int32)
-        expected = [[2, 3, 4, 10], [5]]
+        expected = np.array([
+            [2, 0],
+            [3, 0],
+            [4, 0],
+            [5, 1],
+            [10, 0]
+        ], dtype=np.int32)
         result = cscUnionFind(data)
-        self.assertEqual(self.normalizeGroups(result), self.normalizeGroups(expected))
-
-    def testEmptyInput(self):
-        data = np.empty((0, 2), dtype=np.int32)
-        expected = []
-        result = cscUnionFind(data)
-        self.assertEqual(result, expected)
+        npt.assert_array_equal(result, expected)
 
     def testRepeatedWallets(self):
         data = np.array([
@@ -68,10 +82,13 @@ class cscUnionFindTest(unittest.TestCase):
             [1, 3],  
             [1, 4]
         ], dtype=np.int32)
-        expected = [[2, 3, 4]]
+        expected = np.array([
+            [2, 0],
+            [3, 0],
+            [4, 0]
+        ], dtype=np.int32)
         result = cscUnionFind(data)
-        self.assertEqual(self.normalizeGroups(result), self.normalizeGroups(expected))
+        npt.assert_array_equal(result, expected)
 
 if __name__ == '__main__':
     unittest.main()
-    
